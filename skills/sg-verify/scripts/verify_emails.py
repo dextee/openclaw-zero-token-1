@@ -122,7 +122,25 @@ def is_catch_all(domain: str, mx_hosts: list, timeout: int = 8) -> bool | None:
     return None
 
 
-# ── 5. smtp_verify ───────────────────────────────────────────────────────────
+# ── 5a. is_temporary_failure ─────────────────────────────────────────────────
+
+TEMP_FAILURE_CODES = {450, 451, 452, 503, 525, 554}
+MICROSOFT_PROBE_BLOCK_CODES = {0, 421}
+GOOGLE_PROBE_BLOCK_CODES = {421, 0}
+
+
+def is_temporary_failure(smtp_code: int, mx_provider: str) -> bool:
+    """Return True if this SMTP code suggests a temporary / retryable failure."""
+    if smtp_code in TEMP_FAILURE_CODES:
+        return True
+    if smtp_code in MICROSOFT_PROBE_BLOCK_CODES and mx_provider == "microsoft":
+        return True
+    if smtp_code in GOOGLE_PROBE_BLOCK_CODES and mx_provider == "google":
+        return True
+    return False
+
+
+# ── 5b. smtp_verify ──────────────────────────────────────────────────────────
 
 def smtp_verify(email: str, mx_hosts: list, timeout: int = 8) -> tuple:
     global port25_failures, port25_attempts
@@ -268,7 +286,8 @@ def compute_confidence(smtp_code: int, is_catch_all: bool,
 # ── 8. verify_single ─────────────────────────────────────────────────────────
 
 def verify_single(row: dict, mx_cache: dict, catchall_cache: dict,
-                  skip_catchall_smtp: bool = False) -> dict:
+                  skip_catchall_smtp: bool = False,
+                  retries: int = 0, retry_delay: float = 5.0) -> dict:
     try:
         email_val = None
         email_col = None
@@ -307,6 +326,14 @@ def verify_single(row: dict, mx_cache: dict, catchall_cache: dict,
                 is_catch_all_val = str(catch_all).lower() if catch_all is not None else "unknown"
                 smtp_code, smtp_msg = smtp_verify(email_val, mx_hosts)
 
+                # ── Retry logic for temporary failures ──
+                attempt = 0
+                while is_temporary_failure(smtp_code, mx_provider) and attempt < retries:
+                    attempt += 1
+                    logger.debug(f"Retry {attempt}/{retries} for {email_val} (code {smtp_code})")
+                    time.sleep(retry_delay)
+                    smtp_code, smtp_msg = smtp_verify(email_val, mx_hosts)
+
                 # Google special handling
                 if smtp_code in (421, 0) and mx_provider == "google":
                     email_verified = "unverifiable"
@@ -326,8 +353,16 @@ def verify_single(row: dict, mx_cache: dict, catchall_cache: dict,
                     email_status_detail = f"Mailbox rejected by server (code {smtp_code})"
                 else:
                     email_verified = "unverifiable"
-                    email_confidence = compute_confidence(smtp_code, catch_all or False, mx_provider, email_source)
-                    email_status_detail = f"Server unreachable or greylisted (code {smtp_code})"
+                    # ── Enhanced handling for probe blocks and greylisting ──
+                    if smtp_code in MICROSOFT_PROBE_BLOCK_CODES and mx_provider == "microsoft":
+                        email_confidence = 60
+                        email_status_detail = "Microsoft blocks SMTP probes — address likely valid (personal email)"
+                    elif smtp_code in TEMP_FAILURE_CODES:
+                        email_confidence = 50
+                        email_status_detail = f"Temporary rejection after {attempt} retries (code {smtp_code}) — likely valid"
+                    else:
+                        email_confidence = compute_confidence(smtp_code, catch_all or False, mx_provider, email_source)
+                        email_status_detail = f"Server unreachable or greylisted (code {smtp_code})"
 
         elif not email_val or not email_val.strip():
             # Generate patterns and try
@@ -426,9 +461,14 @@ def main():
     parser.add_argument("--workers", type=int, default=5, help="Concurrent SMTP workers (default: 5, max: 10)")
     parser.add_argument("--delay", type=float, default=1.0, help="Delay between requests per domain (seconds)")
     parser.add_argument("--skip-catchall-smtp", action="store_true", help="Skip SMTP probe for catch-all domains")
+    parser.add_argument("--retry", type=int, default=1, help="Retry attempts for temporary SMTP failures (default: 1, max: 3)")
+    parser.add_argument("--retry-delay", type=float, default=5.0, help="Seconds between retries (default: 5.0)")
+    parser.add_argument("--reverify", action="store_true", help="Only re-verify rows previously marked 'unverifiable'. Keeps true/false/no_mx/catch_all/invalid_format as-is.")
     args = parser.parse_args()
 
     workers = min(args.workers, 10)
+    retries = max(0, min(args.retry, 3))
+    retry_delay = max(1.0, args.retry_delay)
 
     input_path = args.input
     if not os.path.exists(input_path):
@@ -447,6 +487,21 @@ def main():
         rows = list(reader)
 
     logger.info(f"Loaded {len(rows)} rows from {input_path}")
+
+    # ── Reverify mode: only re-check rows marked 'unverifiable' ──
+    if args.reverify:
+        keep_rows = []
+        reverify_rows = []
+        for i, row in enumerate(rows):
+            existing = row.get("email_verified", "").strip().lower()
+            if existing and existing not in ("", "unverifiable"):
+                keep_rows.append((i, row))
+            else:
+                reverify_rows.append((i, row))
+        logger.info(f"Reverify mode: {len(reverify_rows)} rows to re-verify, {len(keep_rows)} rows kept as-is")
+    else:
+        keep_rows = []
+        reverify_rows = list(enumerate(rows))
 
     mx_cache = {}
     catchall_cache = {}
@@ -478,19 +533,23 @@ def main():
                 if diff < args.delay:
                     time.sleep(args.delay - diff)
                 domain_last_request[domain] = time.time()
-        return verify_single(row, mx_cache, catchall_cache, args.skip_catchall_smtp)
+        return verify_single(row, mx_cache, catchall_cache, args.skip_catchall_smtp, retries, retry_delay)
 
     results = []
     try:
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            futures = {executor.submit(rate_limited_verify, row): i for i, row in enumerate(rows)}
-            for future in tqdm(as_completed(futures), total=len(rows), desc="Verifying emails"):
-                try:
-                    result = future.result()
-                    results.append((futures[future], result))
-                except Exception as e:
-                    logger.error(f"Future error: {e}")
+        # Process reverify rows in parallel
+        if reverify_rows:
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = {executor.submit(rate_limited_verify, row): idx for idx, row in reverify_rows}
+                for future in tqdm(as_completed(futures), total=len(futures), desc="Verifying emails"):
+                    try:
+                        result = future.result()
+                        results.append((futures[future], result))
+                    except Exception as e:
+                        logger.error(f"Future error: {e}")
 
+        # Merge keep_rows and reverify results
+        results.extend(keep_rows)
         results.sort(key=lambda x: x[0])
         results = [r for _, r in results]
 
@@ -513,22 +572,24 @@ def main():
 
     # Summary
     counts = {"true": 0, "catch_all": 0, "false": 0, "unverifiable": 0, "no_mx": 0, "invalid_format": 0}
+    likely_valid_count = 0
     for r in results:
         v = r.get("email_verified", "")
         if v in counts:
             counts[v] += 1
+        if v == "unverifiable" and int(r.get("email_confidence", 0)) >= 50:
+            likely_valid_count += 1
 
-    safe = counts["true"] + sum(1 for r in results
-                                 if r.get("email_verified") == "unverifiable"
-                                 and int(r.get("email_confidence", 0)) > 60)
+    safe = counts["true"] + counts["catch_all"] + likely_valid_count
 
-    print(f"\n{Fore.GREEN}✅ Verified (true): {counts['true']}{Style.RESET_ALL}")
-    print(f"{Fore.YELLOW}🟡 Catch-all: {counts['catch_all']}{Style.RESET_ALL}")
+    print(f"\n{Fore.GREEN}✅ Verified (SMTP confirmed): {counts['true']}{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}🟡 Catch-all domains: {counts['catch_all']}{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}💡 Likely valid (Microsoft/greylisted): {likely_valid_count}{Style.RESET_ALL}")
     print(f"{Fore.RED}❌ Invalid/Rejected: {counts['false']}{Style.RESET_ALL}")
-    print(f"{Fore.MAGENTA}⚠️  Unverifiable/Timeout: {counts['unverifiable']}{Style.RESET_ALL}")
+    print(f"{Fore.MAGENTA}⚠️  Unverifiable/Timeout: {counts['unverifiable'] - likely_valid_count}{Style.RESET_ALL}")
     print(f"{Fore.LIGHTBLACK_EX}🚫 No MX: {counts['no_mx']}{Style.RESET_ALL}")
     print(f"Total processed: {len(results)}")
-    print(f"Estimated safe-to-send: {safe}")
+    print(f"{Fore.GREEN}Estimated safe-to-send: {safe}{Style.RESET_ALL}")
     logger.info(f"Results written to {output_path}")
 
 
