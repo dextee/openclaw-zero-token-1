@@ -464,11 +464,56 @@ You can:
 • Add an email column and re-upload → ready for verification
 ```
 
+### Step 3 — Report ACCURATE counts (VERIFY before reporting)
+
+**NEVER use ad-hoc Python one-liners to count CSV rows.** Bots frequently get wrong counts when using `csv.reader`, `len(open(...).readlines())`, or custom one-liners. These methods miscount due to BOM headers, commas inside fields, multiline cells, or encoding issues.
+
+**ALWAYS use one of these two verified methods:**
+
+**Method A — Use normalize_upload.py STATS (preferred)**
+The script already prints reliable counts:
+
+```
+STATS: total=3049 emails=2254 phones=1726 websites=0 hot=0 warm=3049 cold=0
+```
+
+Report these numbers EXACTLY. Do not round, do not re-count.
+
+**Method B — Use count_csv.py (verification / when normalize stats look suspicious)**
+
+```json
+{
+  "tool": "exec",
+  "parameters": {
+    "command": "python3 /root/openclaw-zero-token/skills/sg-leadgen/scripts/count_csv.py /root/.openclaw/workspace/leads/FILENAME.csv 2>&1"
+  }
+}
+```
+
+This script handles BOM, "nan" values, empty fields, and duplicate detection correctly.
+
+**What to report to the user:**
+
+```
+✅ File saved to: /root/.openclaw/workspace/leads/[filename].csv
+
+📊 Stats:
+• Total rows: [N]
+• Valid emails: [N] ([N] unique)
+• Valid phones: [N]
+• Invalid/missing emails: [N]
+• Duplicate emails: [N] rows
+```
+
+**Always report BOTH total and valid counts.** A file with 3,000 rows but only 1,000 valid emails is very different from a file with 3,000 valid emails.
+
 ### CRITICAL RULES for file uploads:
 
 - NEVER fabricate or modify the uploaded data — save it exactly as provided
 - ALWAYS use `normalize_upload.py` — it handles encoding, column name mapping, and plain email lists
 - ALWAYS confirm the saved file path to the user
+- NEVER use custom Python one-liners for counting — use `normalize_upload.py` STATS or `count_csv.py`
+- ALWAYS report total rows AND valid email/phone counts — do not hide invalid rows
 - If the `<file>` block content is very large, save it in one `write` call — do not split
 
 ---
