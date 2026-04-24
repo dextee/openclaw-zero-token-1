@@ -15,6 +15,7 @@ import hashlib
 import os
 import re
 import sys
+import urllib.parse
 from datetime import datetime
 
 from colorama import Fore, Style, init as colorama_init
@@ -44,7 +45,7 @@ def _get_config_email() -> str:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def fill_template(template: str, row: dict, sender: dict) -> str:
+def fill_template(template: str, row: dict, sender: dict, extra_defaults: dict = None) -> str:
     """Replace {{tokens}} with actual values. Unfilled tokens become empty."""
     dm_name = row.get("decision_maker_name", "").strip()
     first_name = dm_name.split()[0] if dm_name else "there"
@@ -62,6 +63,8 @@ def fill_template(template: str, row: dict, sender: dict) -> str:
         "sender_title": sender.get("sender_title", ""),
         "sender_company": sender.get("sender_company", ""),
     }
+    if extra_defaults:
+        defaults.update(extra_defaults)
     result = template
     for token, value in defaults.items():
         result = result.replace("{{" + token + "}}", str(value))
@@ -145,24 +148,29 @@ def generate_sequence(row: dict, sender: dict, tier: str) -> list:
             subjects = email_config["subjects"]
             body_template = email_config["body"]
 
-        # Rotate subjects deterministically so each lead gets a different subject
-        # Uses lead_id hash for even distribution and reproducibility
-        subject_index = int(generate_lead_id(row), 16) % len(subjects)
-        subject = fill_template(subjects[subject_index], row, sender)
-        body = fill_template(body_template, row, sender)
-
-        # Strip any HTML that might have slipped in
-        body = re.sub(r'<[^>]+>', '', body)
-
-        # Spam check
-        spam_found = check_spam_words(subject) + check_spam_words(body)
-
+        # Build unsubscribe URL (mailto for v1 — no web endpoint required)
         to_email = ""
         for col in ("email", "Email", "EMAIL"):
             val = row.get(col, "").strip()
             if val:
                 to_email = val
                 break
+        unsub_url = ""
+        if to_email:
+            unsub_url = f"mailto:unsubscribe@miraeadvisory.com?subject=Unsubscribe%20{urllib.parse.quote(to_email)}"
+        extra_defaults = {"unsubscribe_url": unsub_url}
+
+        # Rotate subjects deterministically so each lead gets a different subject
+        # Uses lead_id hash for even distribution and reproducibility
+        subject_index = int(generate_lead_id(row), 16) % len(subjects)
+        subject = fill_template(subjects[subject_index], row, sender, extra_defaults)
+        body = fill_template(body_template, row, sender, extra_defaults)
+
+        # Strip any HTML that might have slipped in
+        body = re.sub(r'<[^>]+>', '', body)
+
+        # Spam check
+        spam_found = check_spam_words(subject) + check_spam_words(body)
 
         to_name = row.get("decision_maker_name", row.get("company_name", "")).strip()
 

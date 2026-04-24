@@ -39,6 +39,7 @@ import random
 import re
 import smtplib
 import sys
+import tempfile
 import time
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
@@ -54,6 +55,7 @@ sys.path.insert(0, os.path.join(SKILL_DIR, "scripts"))
 import outreach_history as oh
 from domain_throttle import DomainThrottle, extract_domain
 
+# Module-level defaults — can be overridden via CLI args for per-user campaigns
 CONFIG_FILE = os.path.join(SKILL_DIR, ".workspace_smtp_config.json")
 STATE_FILE = os.path.join(SKILL_DIR, ".outreach_state.json")
 AUTH_STATUS_FILE = os.path.join(SKILL_DIR, ".workspace_auth_status.json")
@@ -483,11 +485,18 @@ def send_sequences_from_csv(sequences_csv: str, daily_limit: int = DEFAULT_DAILY
 
 
 def _flush_csv(path: str, sequences: list):
-    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+    """Atomic CSV write using tempfile + os.replace to prevent corruption on crash."""
+    dir_name = os.path.dirname(path) or "."
+    with tempfile.NamedTemporaryFile(
+        mode="w", newline="", encoding="utf-8-sig",
+        dir=dir_name, delete=False, suffix=".tmp"
+    ) as f:
         if sequences:
             writer = csv.DictWriter(f, fieldnames=list(sequences[0].keys()))
             writer.writeheader()
             writer.writerows(sequences)
+        tmp_path = f.name
+    os.replace(tmp_path, path)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -510,7 +519,18 @@ def main():
                         help="Body for one-off send")
     parser.add_argument("--sender-name", default="",
                         help="Sender display name")
+    parser.add_argument("--state-file", default=None,
+                        help="Override path for .outreach_state.json (per-user campaigns)")
+    parser.add_argument("--config-file", default=None,
+                        help="Override path for .workspace_smtp_config.json (per-user SMTP)")
     args = parser.parse_args()
+
+    # Override module-level paths if CLI args provided
+    global CONFIG_FILE, STATE_FILE
+    if args.config_file:
+        CONFIG_FILE = args.config_file
+    if args.state_file:
+        STATE_FILE = args.state_file
 
     if args.check_auth:
         config, email, msg = get_auth_service()
