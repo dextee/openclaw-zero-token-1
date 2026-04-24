@@ -16,8 +16,8 @@ export class DeepSeekAdapter extends BaseAdapter {
   readonly provider = "deepseek";
   readonly models = ["deepseek"];
   readonly defaultModel = "deepseek";
-  // DeepSeek Web 实际使用的模型 ID
-  private readonly actualModelId = "deepseek-chat";
+  // DeepSeek Web 实际使用的模型 ID（优先 V4，回退 V3）
+  private readonly actualModelId = "deepseek-v4";
 
   private cachedCredential: string | null = null;
 

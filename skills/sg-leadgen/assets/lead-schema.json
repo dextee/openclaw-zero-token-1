@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Singapore Lead",
+  "description": "Schema for enriched Singapore B2B leads",
+  "type": "object",
+  "properties": {
+    "company_name": {
+      "type": "string",
+      "description": "Full legal or trading name of the company",
+      "examples": ["Acme Logistics Pte Ltd"]
+    },
+    "phone": {
+      "type": "string",
+      "description": "Primary contact phone number",
+      "examples": ["+65 6123 4567", "+65 9123 4567"]
+    },
+    "email": {
+      "type": "string",
+      "format": "email",
+      "description": "Primary contact email (general or sales)",
+      "examples": ["sales@acme.com.sg", "enquiry@acme.com.sg"]
+    },
+    "website": {
+      "type": "string",
+      "format": "uri",
+      "description": "Company website URL",
+      "examples": ["https://www.acme.com.sg"]
+    },
+    "address": {
+      "type": "string",
+      "description": "Physical address in Singapore",
+      "examples": ["123 Robinson Road, #05-01, Singapore 068902"]
+    },
+    "area": {
+      "type": "string",
+      "description": "Planning area / district",
+      "examples": ["CBD", "Jurong", "Tanjong Pagar", "Changi"]
+    },
+    "industry": {
+      "type": "string",
+      "description": "Industry / business category",
+      "examples": ["Logistics", "F&B", "IT Services", "Interior Design"]
+    },
+    "uen": {
+      "type": "string",
+      "description": "Unique Entity Number (ACRA)",
+      "pattern": "^[0-9]{9}[A-Z]$",
+      "examples": ["201234567K"]
+    },
+    "registration_status": {
+      "type": "string",
+      "description": "ACRA registration status",
+      "enum": ["Active", "Struck Off", "Dissolved", "Live", "Registered - Local Company", "Unknown"],
+      "default": "Unknown"
+    },
+    "linkedin_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "LinkedIn company page URL",
+      "examples": ["https://www.linkedin.com/company/acme-logistics"]
+    },
+    "decision_maker_name": {
+      "type": "string",
+      "description": "Name of identified decision maker",
+      "examples": ["John Tan", "Sarah Lim"]
+    },
+    "decision_maker_title": {
+      "type": "string",
+      "description": "Title of identified decision maker",
+      "examples": ["CEO", "Director", "Managing Director", "Founder"]
+    },
+    "employee_count": {
+      "type": "string",
+      "description": "Employee count or range",
+      "examples": ["10-50", "200+", "Unknown"]
+    },
+    "rating": {
+      "type": "string",
+      "description": "Average rating (from Google Maps / Yelu)",
+      "examples": ["4.5", "3.8"]
+    },
+    "review_count": {
+      "type": "string",
+      "description": "Number of reviews",
+      "examples": ["127", "45"]
+    },
+    "source": {
+      "type": "string",
+      "description": "Source(s) where lead was found",
+      "examples": ["yellowpages", "googlemaps", "sgpdirectory", "yelu"]
+    },
+    "lead_score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Computed lead score (0-100)"
+    },
+    "lead_tier": {
+      "type": "string",
+      "enum": ["Hot", "Warm", "Cold"],
+      "description": "Lead classification based on score"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional notes, observations, or enrichment data"
+    }
+  },
+  "required": ["company_name"],
+  "additionalProperties": true
+}

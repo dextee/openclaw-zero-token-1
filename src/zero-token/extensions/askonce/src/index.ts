@@ -23,8 +23,10 @@ function setupOpenclawStateDir(): void {
   }
 
   const possiblePaths = [
+    path.join(process.cwd(), ".openclaw-upstream-state"),
     path.join(process.cwd(), ".openclaw-zero-state"),
     path.join(process.cwd(), ".openclaw-state"),
+    path.resolve(process.cwd(), "..", ".openclaw-upstream-state"),
     path.resolve(process.cwd(), "..", ".openclaw-zero-state"),
   ];
 

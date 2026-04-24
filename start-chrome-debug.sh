@@ -82,7 +82,7 @@ detect_user_data_dir() {
   case "$OS" in
     mac)  echo "$HOME/Library/Application Support/Chrome-OpenClaw-Debug" ;;
     win)  echo "$LOCALAPPDATA/Chrome-OpenClaw-Debug" ;;
-    wsl)  echo "$HOME/.config/chrome-openclaw-debug" ;;
+    wsl|linux) echo "/root/.config/chrome-openclaw-debug" ;;
     *)    echo "$HOME/.config/chrome-openclaw-debug" ;;
   esac
 }
@@ -90,6 +90,8 @@ detect_user_data_dir() {
 OS=$(detect_os)
 CHROME_PATH=$(detect_chrome)
 USER_DATA_DIR=$(detect_user_data_dir)
+DISPLAY_VALUE="${DISPLAY:-:10}"
+XAUTHORITY_VALUE="${XAUTHORITY:-/root/.Xauthority}"
 
 echo "系统: $OS"
 
@@ -106,6 +108,10 @@ fi
 
 echo "Chrome: $CHROME_PATH"
 echo "用户数据目录: $USER_DATA_DIR"
+if [ "$OS" = "linux" ] || [ "$OS" = "wsl" ]; then
+  echo "DISPLAY: $DISPLAY_VALUE"
+  echo "XAUTHORITY: $XAUTHORITY_VALUE"
+fi
 echo ""
 
 # ─── 单实例：关闭已有调试 Chrome ─────────────────────────────
@@ -136,13 +142,16 @@ echo "正在启动 Chrome 调试模式..."
 echo "端口: 9222"
 echo ""
 
-"$CHROME_PATH" \
+DISPLAY="$DISPLAY_VALUE" XAUTHORITY="$XAUTHORITY_VALUE" "$CHROME_PATH" \
   --remote-debugging-port=9222 \
   --user-data-dir="$USER_DATA_DIR" \
   --no-first-run \
   --no-default-browser-check \
   --disable-background-networking \
   --disable-sync \
+  --no-sandbox \
+  --disable-dev-shm-usage \
+  --disable-gpu \
   --disable-translate \
   --disable-features=TranslateUI \
   --remote-allow-origins=* \
@@ -190,7 +199,9 @@ if curl -s http://127.0.0.1:9222/json/version > /dev/null 2>&1; then
     "https://manus.im/app"
   )
   for url in "${WEB_URLS[@]}"; do
-    "$CHROME_PATH" --remote-debugging-port=9222 --user-data-dir="$USER_DATA_DIR" "$url" > /dev/null 2>&1 &
+    DISPLAY="$DISPLAY_VALUE" XAUTHORITY="$XAUTHORITY_VALUE" \
+      "$CHROME_PATH" --remote-debugging-port=9222 --user-data-dir="$USER_DATA_DIR" "$url" \
+      > /dev/null 2>&1 &
     sleep 0.5
   done
 

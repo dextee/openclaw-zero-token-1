@@ -307,9 +307,7 @@ export class DeepSeekWebClient {
         parent_message_id: params.parentMessageId ?? null,
         prompt: params.message,
         ref_file_ids: params.fileIds || [],
-        thinking_enabled: !(
-          params.model === "deepseek-chat" && !params.model?.includes("reasoning")
-        ), // Default to true unless specifically chat-only
+        thinking_enabled: params.model === "deepseek-reasoner", // Only enable thinking for R1
         search_enabled: params.searchEnabled ?? true,
         preempt: params.preempt ?? false,
       }),
@@ -404,6 +402,20 @@ export class DeepSeekWebClient {
           cacheWrite: 0,
         },
         contextWindow: 64000,
+        maxTokens: 4096,
+      },
+      {
+        id: "deepseek-v4",
+        name: "DeepSeek V4",
+        reasoning: false,
+        input: ["text"],
+        cost: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+        },
+        contextWindow: 128000,
         maxTokens: 4096,
       },
       {

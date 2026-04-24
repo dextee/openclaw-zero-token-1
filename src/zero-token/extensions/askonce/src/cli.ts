@@ -20,10 +20,12 @@ function setupOpenclawStateDir(): void {
     return; // Already set
   }
 
-  // Try to find .openclaw-zero-state in common locations
+  // Try to find project-local state dir in common locations
   const possiblePaths = [
+    path.join(process.cwd(), ".openclaw-upstream-state"),
     path.join(process.cwd(), ".openclaw-zero-state"),
     path.join(process.cwd(), ".openclaw-state"),
+    path.resolve(process.cwd(), "..", ".openclaw-upstream-state"),
     path.resolve(process.cwd(), "..", ".openclaw-zero-state"),
   ];
 

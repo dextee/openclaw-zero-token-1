@@ -493,6 +493,25 @@ describe("runReplyAgent typing (heartbeat)", () => {
     }
   });
 
+  it("suppresses raw tool-call json partials", async () => {
+    const onPartialReply = vi.fn();
+    state.runEmbeddedPiAgentMock.mockImplementationOnce(async (params: AgentRunParams) => {
+      await params.onPartialReply?.({
+        text: '{"tool":"web_search","parameters":{"query":"site:yellowpages.com.sg \\"IT services\\" Singapore"}}',
+      });
+      return { payloads: [], meta: {} };
+    });
+
+    const { run, typing } = createMinimalRun({
+      opts: { isHeartbeat: false, onPartialReply },
+      typingMode: "message",
+    });
+    await run();
+
+    expect(onPartialReply).not.toHaveBeenCalled();
+    expect(typing.startTypingOnText).not.toHaveBeenCalled();
+  });
+
   it("does not start typing on assistant message start without prior text in message mode", async () => {
     state.runEmbeddedPiAgentMock.mockImplementationOnce(async (params: AgentRunParams) => {
       await params.onAssistantMessageStart?.();

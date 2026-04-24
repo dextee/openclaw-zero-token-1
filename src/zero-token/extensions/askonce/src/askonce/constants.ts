@@ -31,8 +31,8 @@ export const SUPPORTED_MODELS = {
     id: "deepseek-web",
     name: "DeepSeek",
     provider: "deepseek",
-    models: ["deepseek-chat", "deepseek-reasoner"],
-    defaultModel: "deepseek-chat",
+    models: ["deepseek-chat", "deepseek-v4", "deepseek-reasoner"],
+    defaultModel: "deepseek-v4",
   },
   "qwen-web": {
     id: "qwen-web",

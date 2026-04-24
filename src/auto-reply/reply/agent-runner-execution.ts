@@ -112,6 +112,14 @@ function isPureTransientRateLimitSummary(err: unknown): boolean {
   );
 }
 
+function looksLikeRawToolCallText(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("{") || !trimmed.includes('"tool"')) {
+    return false;
+  }
+  return /"tool"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[\s\S]*\}\s*\}?$/.test(trimmed);
+}
+
 export async function runAgentTurnWithFallback(params: {
   commandBody: string;
   followupRun: FollowupRun;
@@ -202,6 +210,9 @@ export async function runAgentTurnWithFallback(params: {
           text = stripped.text;
         }
         if (isSilentReplyText(text, SILENT_REPLY_TOKEN)) {
+          return { skip: true };
+        }
+        if (text && looksLikeRawToolCallText(text)) {
           return { skip: true };
         }
         if (

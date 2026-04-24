@@ -159,6 +159,15 @@ export async function discoverDeepseekWebModels(params?: {
       maxTokens: DEEPSEEK_WEB_DEFAULT_MAX_TOKENS,
     },
     {
+      id: "deepseek-v4",
+      name: "DeepSeek V4 (Web)",
+      reasoning: false,
+      input: ["text"],
+      cost: DEEPSEEK_WEB_DEFAULT_COST,
+      contextWindow: DEEPSEEK_WEB_DEFAULT_CONTEXT_WINDOW,
+      maxTokens: DEEPSEEK_WEB_DEFAULT_MAX_TOKENS,
+    },
+    {
       id: "deepseek-reasoner",
       name: "DeepSeek R1 (Web)",
       reasoning: true,
@@ -170,6 +179,15 @@ export async function discoverDeepseekWebModels(params?: {
     {
       id: "deepseek-chat-search",
       name: "DeepSeek V3 (Web + Search)",
+      reasoning: false,
+      input: ["text"],
+      cost: DEEPSEEK_WEB_DEFAULT_COST,
+      contextWindow: DEEPSEEK_WEB_DEFAULT_CONTEXT_WINDOW,
+      maxTokens: DEEPSEEK_WEB_DEFAULT_MAX_TOKENS,
+    },
+    {
+      id: "deepseek-v4-search",
+      name: "DeepSeek V4 (Web + Search)",
       reasoning: false,
       input: ["text"],
       cost: DEEPSEEK_WEB_DEFAULT_COST,

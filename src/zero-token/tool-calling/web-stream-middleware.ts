@@ -18,7 +18,7 @@ import {
 } from "@mariozechner/pi-ai";
 import { stripInboundMeta } from "../streams/strip-inbound-meta.js";
 import { extractToolCall } from "./web-tool-parser.js";
-import { shouldInjectToolPrompt, getToolPrompt } from "./web-tool-prompt.js";
+import { shouldInjectToolPrompt, getToolPrompt, IDENTITY_PREFIX } from "./web-tool-prompt.js";
 
 /**
  * Quick keyword check: does this message likely need tool use?
@@ -26,11 +26,21 @@ import { shouldInjectToolPrompt, getToolPrompt } from "./web-tool-prompt.js";
  * keeping normal chat messages short to reduce ban risk.
  */
 function needsToolInjection(message: string): boolean {
-  const lower = message.toLowerCase();
+  const lower = message.toLowerCase().trim();
+
+  // Short messages (≤20 chars) are almost always follow-ups in a tool-use conversation.
+  // Inject tools so the bot can continue multi-step tasks without losing tool access.
+  if (lower.length <= 20) {
+    return true;
+  }
+
   const keywords = [
     // File operations
     "文件",
     "file",
+    "<file ",   // OpenClaw attachment XML block injected on file uploads
+    "csv",
+    ".csv",
     "read",
     "write",
     "创建",
@@ -68,13 +78,19 @@ function needsToolInjection(message: string): boolean {
     "weather",
     "新闻",
     "news",
-    // Message
+    // Message / outreach
     "发送",
     "send",
     "消息",
     "message",
     "通知",
     "notify",
+    "outreach",
+    "campaign",
+    "sequence",
+    "financing",
+    "template",
+    "email",
     // General tool hints
     "帮我",
     "help me",
@@ -89,6 +105,92 @@ function needsToolInjection(message: string): boolean {
     "install",
     "更新",
     "update",
+    // Lead generation / B2B operations
+    "lead",
+    "leads",
+    "generate",
+    "prospect",
+    "outreach",
+    "b2b",
+    "contact",
+    "company",
+    "companies",
+    "pipeline",
+    "enrich",
+    "verify",
+    "email",
+    // Conversational follow-ups and confirmations
+    "yes",
+    "ok",
+    "okay",
+    "sure",
+    "continue",
+    "proceed",
+    "next",
+    "go ahead",
+    "do it",
+    "what about",
+    "and the",
+    "now check",
+    "now read",
+    "now look",
+    "please",
+    "please check",
+    "please read",
+    "please do",
+    "please look",
+    "please show",
+    "please list",
+    "please access",
+    "please generate",
+    "please find",
+    "please run",
+    "how is",
+    "how about",
+    "what is",
+    "tell me",
+    // Analysis and investigation
+    "analys",
+    "analyze",
+    "analyse",
+    "analysis",
+    "inspect",
+    "review",
+    "investigat",
+    "diagnos",
+    "list",
+    "ls ",
+    "cat ",
+    "find",
+    "get",
+    "access",
+    "open",
+    "load",
+    "scan",
+    "describe",
+    "what is",
+    "what's in",
+    "tell me about",
+    // Audit/test/confirm
+    "study",
+    "audit",
+    "test",
+    "run",
+    "properly",
+    "really",
+    "confirm",
+    "check if",
+    "make sure",
+    "try",
+    "attempt",
+    // Skills
+    "skill",
+    "sg-",
+    "leadgen",
+    "enrich",
+    "verify",
+    "/root/",
+    "path",
   ];
   return keywords.some((kw) => lower.includes(kw));
 }
@@ -104,8 +206,13 @@ export function wrapWithToolCalling(streamFn: StreamFn, api: string): StreamFn {
     const messages = context.messages || [];
     const lastMsg = messages[messages.length - 1];
 
-    // Check if this is a tool result feedback (agent loop returning tool execution results)
+    // --- Determine user message (handles both normal turns and tool result feedback) ---
+    let userMessage = "";
+    let isToolResult = false;
+
     if (lastMsg?.role === "toolResult") {
+      // Tool just executed — format result as user message so model can continue
+      isToolResult = true;
       const tr = lastMsg as unknown as {
         toolCallId?: string;
         toolName?: string;
@@ -119,50 +226,71 @@ export function wrapWithToolCalling(streamFn: StreamFn, api: string): StreamFn {
           }
         }
       }
-      // Format tool result as a user message for web models
-      const feedbackPrompt = `Tool ${tr.toolName || "unknown"} returned: ${resultText}\nPlease answer the original question based on this tool result.`;
-
-      const feedbackContext = Object.assign({}, context, {
-        messages: [{ role: "user" as const, content: feedbackPrompt }],
-        tools: [] as typeof context.tools,
-        systemPrompt: "",
-      });
-      console.log(`[WebStreamMiddleware] tool result feedback, len=${feedbackPrompt.length}`);
-      return streamFn(model, feedbackContext, options);
-    }
-
-    // Extract just the last user message (web models can't handle full context)
-    let userMessage = "";
-    const lastUserMsg = [...messages].toReversed().find((m) => m.role === "user");
-    if (lastUserMsg) {
-      if (typeof lastUserMsg.content === "string") {
-        userMessage = lastUserMsg.content;
-      } else if (Array.isArray(lastUserMsg.content)) {
-        userMessage = (lastUserMsg.content as TextContent[])
-          .filter((p) => p.type === "text")
-          .map((p) => p.text)
-          .join("");
+      userMessage = `Tool ${tr.toolName || "unknown"} returned: ${resultText}\n\nContinue the task. Check if more steps remain. If yes, make the NEXT tool call immediately. Only answer the user when every required step is finished.`;
+    } else {
+      // Extract just the last user message (web models can't handle full context)
+      const lastUserMsg = [...messages].toReversed().find((m) => m.role === "user");
+      if (lastUserMsg) {
+        if (typeof lastUserMsg.content === "string") {
+          userMessage = lastUserMsg.content;
+        } else if (Array.isArray(lastUserMsg.content)) {
+          userMessage = (lastUserMsg.content as TextContent[])
+            .filter((p) => p.type === "text")
+            .map((p) => p.text)
+            .join("");
+        }
       }
+      // Strip OpenClaw metadata
+      userMessage = stripInboundMeta(userMessage);
     }
-
-    // Strip OpenClaw metadata
-    userMessage = stripInboundMeta(userMessage);
 
     if (!userMessage) {
       return streamFn(model, context, options);
     }
 
-    // Only inject tool prompt when the message likely needs tool use.
-    // This reduces ban risk by keeping most messages short and natural.
+    // Inject tool prompt when the message likely needs tool use.
+    // Tool results ALWAYS get tool injection so the model can continue multi-step tasks.
     const hasAgentTools = (context.tools?.length ?? 0) > 0;
     const injectTools =
-      shouldInjectToolPrompt(api) && hasAgentTools && needsToolInjection(userMessage);
+      shouldInjectToolPrompt(api) && hasAgentTools && (isToolResult || needsToolInjection(userMessage));
 
-    // Build the prompt: tool prompt (if applicable) + user message
-    const prompt = injectTools ? getToolPrompt(api) + userMessage : userMessage;
+    // Context preservation for short replies: web models see only the last user message,
+    // so multi-turn workflows (e.g. bot asks question → user replies with a name) lose context.
+    // Prepend the bot's previous message so the model understands what the short reply refers to.
+    let contextPrefix = "";
+    let contextPrefixStatus: "included" | "truncated" | "skipped" = "skipped";
+    if (!isToolResult && injectTools && userMessage.length <= 120) {
+      const assistantMsgs = messages.filter((m) => m.role === "assistant");
+      const lastAssistant = assistantMsgs[assistantMsgs.length - 1];
+      if (lastAssistant) {
+        let assistantText = "";
+        if (typeof lastAssistant.content === "string") {
+          assistantText = lastAssistant.content;
+        } else if (Array.isArray(lastAssistant.content)) {
+          assistantText = (lastAssistant.content as TextContent[])
+            .filter((p) => p.type === "text")
+            .map((p) => p.text)
+            .join("");
+        }
+        if (assistantText) {
+          const MAX_PREFIX_LEN = 4000;
+          const TAIL_LEN = 2000;
+          const snippet = assistantText.length > MAX_PREFIX_LEN
+            ? "…" + assistantText.slice(-TAIL_LEN)
+            : assistantText;
+          contextPrefix = `Your previous message to the user was:\n"${snippet.replace(/"/g, '\\"')}"\n\nThe user replied:\n`;
+          contextPrefixStatus = assistantText.length > MAX_PREFIX_LEN ? "truncated" : "included";
+        }
+      }
+    }
+
+    // Build the prompt: identity prefix always + tool prompt (if applicable) + context prefix + user message
+    const prompt = injectTools
+      ? IDENTITY_PREFIX + getToolPrompt(api) + contextPrefix + userMessage
+      : IDENTITY_PREFIX + userMessage;
 
     console.log(
-      `[WebStreamMiddleware] api=${api} injectTools=${injectTools} promptLen=${prompt.length} userMsgLen=${userMessage.length}`,
+      `[WebStreamMiddleware] api=${api} injectTools=${injectTools} isToolResult=${isToolResult} promptLen=${prompt.length} userMsgLen=${userMessage.length} contextPrefix=${contextPrefixStatus}`,
     );
 
     // Create modified context with just the user message.
@@ -187,9 +315,14 @@ export function wrapWithToolCalling(streamFn: StreamFn, api: string): StreamFn {
       try {
         const originalStream = await Promise.resolve(originalStreamOrPromise);
         let accumulatedText = "";
-        let toolCallEmitted = false;
+        const bufferedEvents: AssistantMessageEvent[] = [];
 
         for await (const event of originalStream) {
+          if (event.type === "error") {
+            wrappedStream.push(event);
+            continue;
+          }
+
           // On stream completion, check final message for tool calls
           if (event.type === "done") {
             // Use final message content (already deduplicated by stream parser)
@@ -206,7 +339,6 @@ export function wrapWithToolCalling(streamFn: StreamFn, api: string): StreamFn {
             const toolCall = extractToolCall(accumulatedText);
 
             if (toolCall) {
-              toolCallEmitted = true;
               const toolId = `web_tool_${Date.now()}`;
 
               // Emit tool call events
@@ -252,12 +384,16 @@ export function wrapWithToolCalling(streamFn: StreamFn, api: string): StreamFn {
                 message: toolMsg,
               });
             } else {
+              for (const bufferedEvent of bufferedEvents) {
+                wrappedStream.push(bufferedEvent);
+              }
               // No tool call — forward the done event as-is
               wrappedStream.push(event);
             }
-          } else if (!toolCallEmitted) {
-            // Forward non-done events as-is
-            wrappedStream.push(event);
+          } else {
+            // Buffer stream text until completion so raw tool JSON is never sent
+            // to downstream channels before we decide whether it is a tool call.
+            bufferedEvents.push(event);
           }
         }
       } catch (err) {

@@ -23,6 +23,16 @@ export const DEEPSEEK_MODEL_CATALOG: ModelDefinitionConfig[] = [
     compat: { supportsUsageInStreaming: true },
   },
   {
+    id: "deepseek-v4",
+    name: "DeepSeek V4",
+    reasoning: false,
+    input: ["text"],
+    contextWindow: 131072,
+    maxTokens: 8192,
+    cost: DEEPSEEK_V3_2_COST,
+    compat: { supportsUsageInStreaming: true },
+  },
+  {
     id: "deepseek-reasoner",
     name: "DeepSeek Reasoner",
     reasoning: true,

@@ -1,0 +1,8 @@
+# SG-Outreach Skill — Python Dependencies
+# Install: pip install -r requirements.txt
+# Auth: Gmail API OAuth2 (long-lived refresh tokens in production)
+
+colorama==0.4.6
+google-auth==2.38.0
+google-auth-oauthlib==1.2.1
+google-api-python-client==2.160.0

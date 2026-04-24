@@ -52,6 +52,37 @@ port_pid() {
   fi
 }
 
+write_pid_file() {
+  local pid="$1"
+  echo "$pid" > "$PID_FILE"
+}
+
+remove_pid_file() {
+  rm -f "$PID_FILE"
+}
+
+sync_pid_file_with_port() {
+  local port_processes port_process_count port_process
+  port_processes="$(
+    port_pid "$PORT" | awk 'NF { print $1 }' | sort -u | tr '\n' ' ' | xargs 2>/dev/null || true
+  )"
+  if [ -z "$port_processes" ]; then
+    remove_pid_file
+    return 1
+  fi
+
+  set -- $port_processes
+  port_process_count=$#
+  port_process="$1"
+
+  if [ "$port_process_count" -eq 1 ] && [ -n "$port_process" ]; then
+    write_pid_file "$port_process"
+    return 0
+  fi
+
+  return 2
+}
+
 # 打开浏览器（跨平台）
 open_browser() {
   local url=$1
@@ -111,6 +142,8 @@ fi
 
 # ─── 功能函数 ────────────────────────────────────────────────
 stop_gateway() {
+  sync_pid_file_with_port >/dev/null 2>&1 || true
+
   if [ -f "$PID_FILE" ]; then
     OLD_PID=$(cat "$PID_FILE")
     if kill -0 "$OLD_PID" 2>/dev/null; then
@@ -121,7 +154,7 @@ stop_gateway() {
         kill -9 "$OLD_PID" 2>/dev/null
       fi
     fi
-    rm -f "$PID_FILE"
+    remove_pid_file
   fi
 
   PORT_PID=$(port_pid "$PORT")
@@ -133,9 +166,17 @@ stop_gateway() {
 }
 
 start_gateway() {
+  # Load .env file if it exists
+  if [ -f "$SCRIPT_DIR/.env" ]; then
+    set -a
+    . "$SCRIPT_DIR/.env"
+    set +a
+  fi
+
   export OPENCLAW_CONFIG_PATH="$CONFIG_FILE"
   export OPENCLAW_STATE_DIR="$STATE_DIR"
   export OPENCLAW_GATEWAY_PORT="$PORT"
+  export TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-8686771791:AAFMmAvxxSd3m2aqX1vmD-DICo36L0T6Zes}"
 
   echo "系统: $OS  |  Node: $($NODE --version 2>/dev/null)"
   echo "启动 Gateway 服务..."
@@ -145,9 +186,14 @@ start_gateway() {
   echo "端口: $PORT"
   echo ""
 
-  nohup "$NODE" "$SCRIPT_DIR/openclaw.mjs" gateway --port "$PORT" > "$TMP_LOG" 2>&1 &
+  TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-8686771791:AAFMmAvxxSd3m2aqX1vmD-DICo36L0T6Zes}" \
+  OPENCLAW_CONFIG_PATH="$CONFIG_FILE" \
+  OPENCLAW_STATE_DIR="$STATE_DIR" \
+  OPENCLAW_GATEWAY_PORT="$PORT" \
+  nohup setsid "$NODE" "$SCRIPT_DIR/openclaw.mjs" gateway --port "$PORT" < /dev/null > "$TMP_LOG" 2>&1 &
   GATEWAY_PID=$!
-  echo "$GATEWAY_PID" > "$PID_FILE"
+
+  write_pid_file "$GATEWAY_PID"
 
   echo "等待 Gateway 就绪..."
   WEBUI_READY=0
@@ -162,7 +208,7 @@ start_gateway() {
     if ! kill -0 $GATEWAY_PID 2>/dev/null; then
       echo "Gateway 进程已退出，启动失败"
       cat "$TMP_LOG"
-      rm -f "$PID_FILE"
+      remove_pid_file
       exit 1
     fi
     sleep 1
@@ -184,7 +230,7 @@ start_gateway() {
   else
     echo "Gateway 服务启动失败，请查看日志:"
     cat "$TMP_LOG"
-    rm -f "$PID_FILE"
+    remove_pid_file
     exit 1
   fi
 }
@@ -253,12 +299,14 @@ case "${1:-start}" in
     start_gateway
     ;;
   status)
+    sync_pid_file_with_port >/dev/null 2>&1 || true
     if [ -f "$PID_FILE" ]; then
       PID=$(cat "$PID_FILE")
       if kill -0 "$PID" 2>/dev/null; then
         echo "Gateway 服务运行中 (PID: $PID)"
         echo "Web UI: http://127.0.0.1:$PORT/#token=${GATEWAY_TOKEN}"
       else
+        remove_pid_file
         echo "Gateway 服务未运行 (PID 文件存在但进程已退出)"
       fi
     else

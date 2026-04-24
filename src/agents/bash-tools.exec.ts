@@ -181,7 +181,7 @@ export function createExecTool(
     defaults?.backgroundMs ?? readEnvInt("PI_BASH_YIELD_MS"),
     10_000,
     10,
-    120_000,
+    300_000,
   );
   const allowBackground = defaults?.allowBackground ?? true;
   const defaultTimeoutSec =
@@ -267,7 +267,7 @@ export function createExecTool(
               params.yieldMs ?? defaultBackgroundMs,
               defaultBackgroundMs,
               10,
-              120_000,
+              300_000,
             )
         : null;
       const elevatedDefaults = defaults?.elevated;
@@ -456,6 +456,11 @@ export function createExecTool(
         );
       } else {
         applyPathPrepend(env, defaultPathPrepend);
+      }
+
+      // Inject Telegram chat ID so pipeline scripts can route alerts to the triggering user.
+      if (defaults?.currentChannelId?.startsWith("telegram:")) {
+        env.TELEGRAM_CHAT_ID = defaults.currentChannelId.slice("telegram:".length);
       }
 
       if (host === "node") {

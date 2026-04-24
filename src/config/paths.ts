@@ -66,6 +66,22 @@ export function resolveStateDir(
   if (override) {
     return resolveUserPath(override, env, effectiveHomedir);
   }
+  // Zero Token fork: auto-detect project-local state dir before falling back to home
+  const cwd = process.cwd();
+  const localCandidates = [
+    path.join(cwd, ".openclaw-upstream-state"),
+    path.join(cwd, ".openclaw-zero-state"),
+    path.join(cwd, ".openclaw-state"),
+  ];
+  for (const candidate of localCandidates) {
+    try {
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+        return candidate;
+      }
+    } catch {
+      // Ignore errors
+    }
+  }
   const newDir = newStateDir(effectiveHomedir);
   if (env.OPENCLAW_TEST_FAST === "1") {
     return newDir;

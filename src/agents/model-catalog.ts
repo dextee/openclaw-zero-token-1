@@ -326,6 +326,7 @@ export function modelSupportsDocument(entry: ModelCatalogEntry | undefined): boo
 const KNOWN_WEB_MODEL_ENTRIES: ModelCatalogEntry[] = [
   // deepseek-web
   { id: "deepseek-chat", name: "DeepSeek V3", provider: "deepseek-web", contextWindow: 64000 },
+  { id: "deepseek-v4", name: "DeepSeek V4", provider: "deepseek-web", contextWindow: 128000 },
   {
     id: "deepseek-reasoner",
     name: "DeepSeek R1",
