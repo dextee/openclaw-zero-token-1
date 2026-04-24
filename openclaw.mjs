@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
-import path from "node:path";
 import module from "node:module";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MIN_NODE_MAJOR = 22;
@@ -18,13 +18,20 @@ function loadEnvFile(envPath) {
     const data = fs.readFileSync(envPath, "utf-8");
     for (const line of data.split(/\r?\n/)) {
       const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
+      if (!trimmed || trimmed.startsWith("#")) {
+        continue;
+      }
       const eq = trimmed.indexOf("=");
-      if (eq === -1) continue;
+      if (eq === -1) {
+        continue;
+      }
       const key = trimmed.slice(0, eq).trim();
       let value = trimmed.slice(eq + 1).trim();
       // Strip surrounding quotes
-      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
         value = value.slice(1, -1);
       }
       if (key && process.env[key] === undefined) {
@@ -37,7 +44,9 @@ function loadEnvFile(envPath) {
 }
 
 function autoDetectStateDir() {
-  if (process.env.OPENCLAW_STATE_DIR) return;
+  if (process.env.OPENCLAW_STATE_DIR) {
+    return;
+  }
   const candidates = [
     path.join(__dirname, ".openclaw-upstream-state"),
     path.join(__dirname, ".openclaw-zero-state"),
