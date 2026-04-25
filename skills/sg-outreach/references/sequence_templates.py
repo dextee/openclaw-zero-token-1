@@ -50,7 +50,7 @@ FINANCING_VARIANT = {
         "Quick question: is {{company_name}} looking to expand or optimize your funding setup in the next 6 months?\n\n"
         "If yes, grab a 15-min slot here and we'll walk you through what you'd likely qualify for — no obligation:\n"
         "https://calendar.app.google/Vt8th4ByKcCxD4Fv6\n\n"
-        "{{sender_name}} | Mirae Advisory | miraeadvisory.com\n"
+        "Mirae Advisory | miraeadvisory.com\n"
         "One Raffles Place Mall, #02-01, Singapore 048616\n"
         "Unsubscribe: {{unsubscribe_url}}"
     ),
@@ -66,7 +66,7 @@ FINANCING_VARIANT = {
         "usual bank offered.\n\n"
         "Same business, same financials — just the right lender.\n\n"
         "Worth a brief call to see what's available for {{company_name}}?\n\n"
-        "{{sender_name}} | Mirae Advisory | miraeadvisory.com\n"
+        "Mirae Advisory | miraeadvisory.com\n"
         "One Raffles Place Mall, #02-01, Singapore 048616\n"
         "Unsubscribe: {{unsubscribe_url}}"
     ),
@@ -80,7 +80,7 @@ FINANCING_VARIANT = {
         "Last note from me. If {{company_name}} ever needs help comparing lenders or exploring financing options, "
         "my door's open.\n\n"
         "Best of luck to you and the team in {{area}}.\n\n"
-        "{{sender_name}} | Mirae Advisory | miraeadvisory.com\n"
+        "Mirae Advisory | miraeadvisory.com\n"
         "One Raffles Place Mall, #02-01, Singapore 048616\n"
         "Unsubscribe: {{unsubscribe_url}}"
     ),

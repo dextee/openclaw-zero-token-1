@@ -27,6 +27,23 @@ CAMPAIGN="$USER_DIR/active_campaign.json"
 
 SEQ_CSV=$(python3 -c "import json; print(json.load(open('$CAMPAIGN'))['sequences_csv'])")
 LIMIT=$(python3 -c "import json; print(json.load(open('$CAMPAIGN'))['daily_limit'])")
+
+# Resolve sender list. New schema (preferred): senders array in active_campaign.json.
+# Legacy: single global SMTP config + global state file. We always normalise to a list.
+SENDERS_JSON=$(python3 -c "
+import json
+c = json.load(open('$CAMPAIGN'))
+senders = c.get('senders')
+if not senders:
+    senders = [{
+        'email': c.get('sender_email','admin@miraeadvisory.com'),
+        'config_file': '$USER_DIR/.workspace_smtp_config.json' if __import__('os').path.exists('$USER_DIR/.workspace_smtp_config.json') else '',
+        'state_file': '$USER_DIR/.outreach_state.json',
+        'daily_limit': c.get('daily_limit', 25),
+    }]
+print(json.dumps(senders))
+")
+NUM_SENDERS=$(python3 -c "import json; print(len(json.loads('$SENDERS_JSON')))")
 TODAY=$(TZ=Asia/Singapore date +%Y%m%d)
 BACKUP_DIR="$USER_DIR/backups/$TODAY"
 mkdir -p "$BACKUP_DIR"
@@ -73,49 +90,111 @@ print(len(pending))
   fi
 fi
 
-notify_telegram "📬 Daily outreach started — sending up to $LIMIT emails."
+notify_telegram "📬 Daily outreach started — *$NUM_SENDERS senders*, up to *$LIMIT emails total* today."
 
 START=$(date +%s)
+ACCUM_LOG="$USER_DIR/last_run.log"
+: > "$ACCUM_LOG"  # truncate for fresh run
 
-# Per-user SMTP config resolution
-GLOBAL_CONFIG="/root/openclaw-zero-token/skills/sg-outreach/.workspace_smtp_config.json"
-USER_CONFIG="$USER_DIR/.workspace_smtp_config.json"
-CONFIG_ARG=""
-if [[ -f "$USER_CONFIG" ]]; then
-  CONFIG_ARG="--config-file $USER_CONFIG"
-fi
+TOTAL_SENT=0
+TOTAL_FAILED=0
+TOTAL_SKIPPED=0
+RC=0
+PER_SENDER_RESULTS=""
 
-# Disable pipefail temporarily so we can capture sender exit code
-set +o pipefail
-python3 /root/openclaw-zero-token/skills/sg-outreach/scripts/workspace_smtp_sender.py \
-  --sequences "$SEQ_CSV" --daily-limit "$LIMIT" \
-  --state-file "$STATE_FILE" $CONFIG_ARG 2>&1 | tee "$USER_DIR/last_run.log"
-RC=${PIPESTATUS[0]}
-set -o pipefail
+# Loop through every configured sender
+for i in $(seq 0 $((NUM_SENDERS-1))); do
+  SENDER_EMAIL=$(python3 -c "import json; s=json.loads('$SENDERS_JSON')[$i]; print(s.get('email',''))")
+  SENDER_CFG=$(python3 -c "import json; s=json.loads('$SENDERS_JSON')[$i]; print(s.get('config_file',''))")
+  SENDER_STATE=$(python3 -c "import json; s=json.loads('$SENDERS_JSON')[$i]; print(s.get('state_file',''))")
+  SENDER_LIMIT=$(python3 -c "import json; s=json.loads('$SENDERS_JSON')[$i]; print(s.get('daily_limit', 25))")
 
-DUR=$(( $(date +%s) - START ))
+  CONFIG_ARG=""
+  [[ -n "$SENDER_CFG" && -f "$SENDER_CFG" ]] && CONFIG_ARG="--config-file $SENDER_CFG"
 
-SENT=$(grep -c '^Sent to ' "$USER_DIR/last_run.log" 2>/dev/null || true)
-FAILED=$(grep -c '^FAILED: ' "$USER_DIR/last_run.log" 2>/dev/null || true)
-SKIPPED=$(grep -c '^Skipped' "$USER_DIR/last_run.log" 2>/dev/null || true)
+  notify_telegram "📨 Sending up to *$SENDER_LIMIT* from \`$SENDER_EMAIL\`..."
 
-# Parse actual sent count from sender summary (more reliable than grep)
-ACTUAL_SENT=$(python3 -c "
-import re, sys
-log = open('$USER_DIR/last_run.log').read()
+  SENDER_LOG="$USER_DIR/last_run_${i}.log"
+  set +o pipefail
+  python3 /root/openclaw-zero-token/skills/sg-outreach/scripts/workspace_smtp_sender.py \
+    --sequences "$SEQ_CSV" --daily-limit "$SENDER_LIMIT" \
+    --sender-name "Mirae Advisory" \
+    --inter-send-delay-min 30 --inter-send-delay-max 180 \
+    --state-file "$SENDER_STATE" $CONFIG_ARG 2>&1 | tee "$SENDER_LOG"
+  SENDER_RC=${PIPESTATUS[0]}
+  set -o pipefail
+
+  cat "$SENDER_LOG" >> "$ACCUM_LOG"
+
+  SENDER_SENT=$(python3 -c "
+import re
+log = open('$SENDER_LOG').read()
 m = re.search(r'Sent:\s+(\d+)', log)
 print(m.group(1) if m else '0')
-" 2>/dev/null || echo "$SENT")
+" 2>/dev/null || echo "0")
+  SENDER_FAILED=$(python3 -c "
+import re
+log = open('$SENDER_LOG').read()
+m = re.search(r'Failed:\s+(\d+)', log)
+print(m.group(1) if m else '0')
+" 2>/dev/null || echo "0")
+  SENDER_SKIPPED=$(python3 -c "
+import re
+log = open('$SENDER_LOG').read()
+m = re.search(r'Skipped \(dup\):\s+(\d+)', log)
+print(m.group(1) if m else '0')
+" 2>/dev/null || echo "0")
 
-echo "$(date -Iseconds)|trigger=$TRIGGER|sent=$ACTUAL_SENT|failed=$FAILED|skipped=$SKIPPED|duration_s=$DUR|rc=$RC" >> "$USER_DIR/runs.log"
+  TOTAL_SENT=$((TOTAL_SENT + SENDER_SENT))
+  TOTAL_FAILED=$((TOTAL_FAILED + SENDER_FAILED))
+  TOTAL_SKIPPED=$((TOTAL_SKIPPED + SENDER_SKIPPED))
+  [[ $SENDER_RC -ne 0 ]] && RC=$SENDER_RC
+
+  PER_SENDER_RESULTS="${PER_SENDER_RESULTS}  • ${SENDER_EMAIL}: ${SENDER_SENT} sent, ${SENDER_FAILED} failed
+"
+done
+
+DUR=$(( $(date +%s) - START ))
+ACTUAL_SENT=$TOTAL_SENT
+FAILED=$TOTAL_FAILED
+SKIPPED=$TOTAL_SKIPPED
+
+echo "$(date -Iseconds)|trigger=$TRIGGER|senders=$NUM_SENDERS|sent=$ACTUAL_SENT|failed=$FAILED|skipped=$SKIPPED|duration_s=$DUR|rc=$RC" >> "$USER_DIR/runs.log"
 
 if [[ $RC -eq 0 ]]; then
-  notify_telegram "✅ Daily outreach done: $ACTUAL_SENT sent, $FAILED failed, $SKIPPED skipped (${DUR}s).\nNext run tomorrow 8am SGT."
-  # Post next-25 preview
+  NEXT_RUN=$(python3 -c "
+from datetime import datetime, timedelta
+import zoneinfo
+tz = zoneinfo.ZoneInfo('Asia/Singapore')
+now = datetime.now(tz)
+d = now.replace(hour=8, minute=0, second=0, microsecond=0)
+if d <= now:
+    d += timedelta(days=1)
+print(d.strftime('%a %d %b, 8am SGT'))
+" 2>/dev/null || echo "tomorrow 8am SGT")
+
+  # Step 1: post code-block list of who received today's emails
   python3 /root/openclaw-zero-token/skills/sg-outreach/scripts/outreach_status.py \
-    --user-id "$USER_ID" --preview-next 25 --notify-chat-id "$USER_ID" || true
+    --sent today --user-id "$USER_ID" --notify-chat-id "$USER_ID" || true
+
+  # Step 2: professional success message + per-sender breakdown + command hints
+  notify_telegram "✅ *Daily outreach delivered!*
+
+📬 *$ACTUAL_SENT emails sent today* across $NUM_SENDERS sender(s)
+$PER_SENDER_RESULTS
+⏱  Total: ${DUR}s ($FAILED failed, $SKIPPED skipped)
+📅 Next run: *$NEXT_RUN*
+
+You can reply:
+  • *pause outreach* — stop daily sends
+  • *resume outreach* — restart daily sends
+  • *skip today* — skip the next run only
+
+Type *menu* for the full command list."
 else
-  notify_telegram "⚠️ Outreach failed (rc=$RC). Reply 'show failures' to see details or 'retry today' to retry."
+  notify_telegram "⚠️ *Outreach failed* (rc=$RC).
+Reply *show failures* to see the reasons or *retry today* to retry.
+Type *menu* for the full command list."
 fi
 
 # Bounce auto-suppression

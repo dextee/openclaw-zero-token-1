@@ -52,9 +52,9 @@ def validate_sequences(sequences_csv: str) -> dict:
             errors.append(f"Missing required column: {col}")
 
     for i, row in enumerate(rows, 1):
-        # Empty sender_name
-        if not row.get("sender_name", "").strip():
-            errors.append(f"Row {i}: sender_name is EMPTY — bot must ask user for sender name")
+        # sender_name may be empty when the campaign signs as company only
+        # (e.g. "Mirae Advisory" with no individual name). Templates no longer
+        # reference {{sender_name}}, so empty is safe.
 
         # sender_email is optional — sender script falls back to config file email
 

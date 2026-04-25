@@ -90,9 +90,13 @@ def ingest_xlsx(input_path: str, output_path: str) -> dict:
     mapped_headers = [map_header(h) for h in headers]
 
     # Build output rows
-    out_headers = ["company_name", "email", "phone", "decision_maker_name",
-                   "industry", "loan_amount", "loan_status", "source_date",
-                   "sent_at", "message_id", "delivery_status"]
+    base_headers = ["company_name", "email", "phone", "decision_maker_name",
+                    "industry", "loan_amount", "loan_status", "source_date",
+                    "sent_at", "message_id", "delivery_status"]
+    # Preserve sg-verify columns if the source xlsx already has them
+    verify_cols = ["email_verified", "email_confidence", "email_source",
+                   "email_status_detail", "mx_provider", "is_catch_all"]
+    out_headers = base_headers + [c for c in verify_cols if c in mapped_headers]
 
     kept = []
     drop_reasons = {"invalid_email": 0, "missing_email": 0, "duplicate_email": 0}

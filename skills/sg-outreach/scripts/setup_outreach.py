@@ -415,32 +415,24 @@ class Wizard:
         wip = self.wip
 
         if step == 0:
-            _notify(self.chat_id, "🚀 *Setup Outreach* — Let's configure your daily email campaign.\nStep 1/16: What sender name should I use? (e.g., 'Dexter Ng')")
-            self.awaiting = "sender_name"
-            wip["awaiting"] = self.awaiting
-            _save_wip(self.chat_id, wip)
-            return "wait"
-
-        if step == 1:
-            _notify(self.chat_id, f"Step 2/16: What is your job title? (default: Director)")
-            self.awaiting = "sender_title"
-            wip["awaiting"] = self.awaiting
-            _save_wip(self.chat_id, wip)
-            return "wait"
-
-        if step == 2:
-            _notify(self.chat_id, f"Step 3/16: What is your sending email address? (must match your SMTP domain)")
+            # No personal sender name: emails sign as "Mirae Advisory" only.
+            wip["sender_name"] = ""
+            wip["sender_title"] = ""
+            wip["sender_company"] = "Mirae Advisory"
+            _notify(self.chat_id, "🚀 *Setup Outreach* — Let's configure your daily email campaign.\nEmails will be signed as *Mirae Advisory* (no personal name).\n\nStep 1/12: What sending email address should be used? (e.g., admin@miraeadvisory.com)")
             self.awaiting = "sender_email"
             wip["awaiting"] = self.awaiting
             _save_wip(self.chat_id, wip)
             return "wait"
 
+        if step == 1:
+            return "next"  # placeholder steps now collapsed
+
+        if step == 2:
+            return "next"
+
         if step == 3:
-            _notify(self.chat_id, f"Step 4/16: What company name should appear in the signature? (default: Mirae Advisory)")
-            self.awaiting = "sender_company"
-            wip["awaiting"] = self.awaiting
-            _save_wip(self.chat_id, wip)
-            return "wait"
+            return "next"
 
         if step == 4:
             _notify(self.chat_id, f"Step 5/16: Use shared Mirae SMTP? Reply 'yes' (default) or 'byo' to bring your own.")
@@ -602,7 +594,18 @@ class Wizard:
             with open(final_path, "w", encoding="utf-8") as f:
                 json.dump(wip, f, indent=2)
             _wip_path(self.chat_id).unlink(missing_ok=True)
-            _notify(self.chat_id, f"🎉 Outreach setup complete!\nDaily limit: {wip['daily_limit']} emails\nNext run: tomorrow 8am SGT\nReply 'next 25' to preview the first batch.")
+            try:
+                from datetime import datetime, timedelta
+                import zoneinfo
+                tz = zoneinfo.ZoneInfo('Asia/Singapore')
+                now = datetime.now(tz)
+                d = now.replace(hour=8, minute=0, second=0, microsecond=0)
+                if d <= now:
+                    d += timedelta(days=1)
+                next_run_str = d.strftime('%a %d %b, 8am SGT')
+            except Exception:
+                next_run_str = "tomorrow 8am SGT"
+            _notify(self.chat_id, f"🎉 Outreach setup complete!\nDaily limit: {wip['daily_limit']} emails\nNext run: {next_run_str}\nReply 'next 25' to preview the first batch, or 'help outreach' for all commands.")
             return "done"
 
         _notify(self.chat_id, "Setup complete.")

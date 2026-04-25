@@ -83,45 +83,194 @@ def status(chat_id: str) -> str:
     active = os.path.exists(os.path.join(user_dir, "active_campaign.json"))
     paused = os.path.exists(os.path.join(user_dir, "paused.flag"))
 
+    total = len(seqs)
     total_sent = sum(1 for s in seqs if s.get("status") == "sent")
     total_failed = sum(1 for s in seqs if s.get("status") == "failed")
     pending = [s for s in seqs if s.get("status") in ("", "pending")]
+    suppressed = sum(1 for s in seqs if "skipped" in (s.get("status") or "") or "suppress" in (s.get("status") or ""))
+
+    today_sgt = datetime.now().strftime("%Y-%m-%d")
+    sent_today = sum(1 for s in seqs if s.get("status") == "sent" and (s.get("sent_at") or "").startswith(today_sgt))
 
     last_run = "never"
+    last_sent = last_failed = "?"
     if runs:
         last = _parse_run_line(runs[-1])
-        last_run = last.get("raw", "").split("|")[0]
+        last_run = last.get("raw", "").split("|")[0][:19]
+        last_sent = last.get("sent", "?")
+        last_failed = last.get("failed", "?")
 
     next_run = "unknown"
     cron_expr = campaign.get("cron_expr", "")
     if cron_expr:
         next_run = _next_run_sgt(cron_expr)
+    elif active:
+        next_run = "next weekday 8am SGT"
 
-    failures_7d = 0
-    cutoff = datetime.now() - timedelta(days=7)
-    for line in runs:
-        try:
-            ts_str = line.split("|")[0]
-            ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-            if ts >= cutoff:
-                parsed = _parse_run_line(line)
-                failures_7d += int(parsed.get("failed", 0))
-        except Exception:
-            continue
+    daily_limit = campaign.get("daily_limit", 25)
+    seq_csv = campaign.get("sequences_csv", os.path.join(user_dir, "sequences.csv"))
+    pct = (total_sent / total * 100) if total else 0
+
+    state_word = "🟢 active" if (active and not paused) else ("⏸ paused" if paused else "⚪ not set up")
 
     lines = [
-        f"📬 Outreach Status",
+        f"📬 Mirae Outreach — Status",
         f"",
-        f"Active: {'yes' if active else 'no'}",
-        f"Paused: {'yes' if paused else 'no'}",
-        f"Daily limit: {campaign.get('daily_limit', 'unset')}",
+        f"State: {state_word}",
+        f"Daily limit: {daily_limit} emails",
         f"",
-        f"Sent: {total_sent} | Failed: {total_failed} | Pending: {len(pending)}",
-        f"Last run: {last_run}",
-        f"Next run: {next_run}",
-        f"Failures (7d): {failures_7d}",
+        f"📊 Progress: {total_sent}/{total} sent ({pct:.1f}%)",
+        f"  • Sent today: {sent_today}/{daily_limit}",
+        f"  • Pending: {len(pending)}",
+        f"  • Failed: {total_failed}",
+        f"  • Skipped/suppressed: {suppressed}",
+        f"",
+        f"⏱  Last run: {last_run} ({last_sent} sent, {last_failed} failed)",
+        f"⏱  Next run: {next_run}",
+        f"",
+        f"📂 Tracking file:",
+        f"   {seq_csv}",
+        f"",
+        f"Reply 'view sent' / 'view pending' / 'view failures' to drill in.",
+        f"Reply 'menu' for all commands.",
     ]
     return "\n".join(lines)
+
+
+def show_files(chat_id: str) -> str:
+    campaign = _load_campaign(chat_id)
+    user_dir = _user_dir(chat_id)
+    seqs = _load_sequences(chat_id)
+
+    seq_csv = campaign.get("sequences_csv", os.path.join(user_dir, "sequences.csv"))
+    source_list = campaign.get("source_list", os.path.join(user_dir, "source_list.csv"))
+    runs_log = os.path.join(user_dir, "runs.log")
+    cron_log = os.path.join(user_dir, "cron.log")
+
+    def _info(p):
+        if not os.path.exists(p):
+            return "  (not yet created)"
+        sz = os.path.getsize(p)
+        return f"  {sz:,} bytes"
+
+    sent = sum(1 for s in seqs if s.get("status") == "sent")
+    pending = sum(1 for s in seqs if s.get("status") in ("", "pending"))
+
+    lines = [
+        f"📂 Outreach files",
+        f"",
+        f"📄 Tracking CSV ({sent} sent, {pending} pending)",
+        f"   {seq_csv}",
+        _info(seq_csv),
+        f"",
+        f"📋 Source list (original upload)",
+        f"   {source_list}",
+        _info(source_list),
+        f"",
+        f"📝 Run history",
+        f"   {runs_log}",
+        _info(runs_log),
+        f"",
+        f"📝 Cron fire log",
+        f"   {cron_log}",
+        _info(cron_log),
+        f"",
+        f"To view contents in Telegram, reply:",
+        f"  • view sent — emails delivered so far",
+        f"  • view pending — emails still queued",
+        f"  • view failures — emails that failed",
+        f"  • view runs — last 10 cron runs",
+        f"",
+        f"For the full CSV, copy the path above and download via Files.",
+    ]
+    return "\n".join(lines)
+
+
+def view_section(chat_id: str, which: str, limit: int = 25) -> str:
+    seqs = _load_sequences(chat_id)
+    if which == "sent":
+        rows = [s for s in seqs if s.get("status") == "sent"]
+        title = f"Sent ({len(rows)} total — showing last {min(limit, len(rows))})"
+        rows = rows[-limit:]
+    elif which == "pending":
+        rows = [s for s in seqs if s.get("status") in ("", "pending")]
+        title = f"Pending ({len(rows)} total — showing first {min(limit, len(rows))})"
+        rows = rows[:limit]
+    elif which == "failures":
+        rows = [s for s in seqs if s.get("status") == "failed"]
+        title = f"Failures ({len(rows)} total — showing last {min(limit, len(rows))})"
+        rows = rows[-limit:]
+    else:
+        return f"Unknown section: {which}. Use sent / pending / failures."
+
+    if not rows:
+        return f"No {which} emails."
+
+    lines = [title, ""]
+    for i, s in enumerate(rows, 1):
+        co = (s.get("company_name") or "")[:30]
+        em = (s.get("to_email") or "")[:38]
+        lines.append(f"{i:>2}. {co}")
+        lines.append(f"    {em}")
+        if which == "sent":
+            sent_at = (s.get("sent_at") or "")[:19]
+            lines.append(f"    sent: {sent_at}")
+        elif which == "failures":
+            reason = s.get("status_detail") or s.get("error") or "failed"
+            lines.append(f"    reason: {reason}")
+    return "\n".join(lines)
+
+
+def view_runs(chat_id: str, limit: int = 10) -> str:
+    runs = _load_runs_log(chat_id)
+    if not runs:
+        return "No runs yet."
+    recent = runs[-limit:]
+    lines = [f"Last {len(recent)} runs:", ""]
+    for line in recent:
+        p = _parse_run_line(line)
+        ts = p.get("raw", "").split("|")[0][:19]
+        lines.append(f"{ts}  trigger={p.get('trigger','?')}  sent={p.get('sent','?')}  failed={p.get('failed','?')}  rc={p.get('rc','?')}")
+    return "\n".join(lines)
+
+
+def menu() -> str:
+    return (
+        "📬 *Mirae Outreach — Command Menu*\n"
+        "\n"
+        "📊 *Status & Progress*\n"
+        "  • status — current state, today's progress, next run\n"
+        "  • sent today — emails sent today\n"
+        "  • sent yesterday — emails sent yesterday\n"
+        "  • show failures — recent failed sends\n"
+        "  • next 25 — preview tomorrow's batch\n"
+        "  • send report — 7-day summary\n"
+        "\n"
+        "📂 *Files & Records*\n"
+        "  • show files — file paths + sizes\n"
+        "  • view sent — recent delivered emails\n"
+        "  • view pending — what's still queued\n"
+        "  • view failures — what failed\n"
+        "  • view runs — last 10 cron runs\n"
+        "\n"
+        "⚙️ *Control*\n"
+        "  • pause outreach — stop daily fires\n"
+        "  • resume outreach — restart daily fires\n"
+        "  • skip today — skip today only\n"
+        "  • send now — fire today's batch now\n"
+        "  • retry today — re-run today if it failed\n"
+        "  • stop outreach — cancel campaign\n"
+        "\n"
+        "🔧 *Settings*\n"
+        "  • change daily limit to N — change cap (1–100)\n"
+        "\n"
+        "📤 *List Management*\n"
+        "  • upload an xlsx file → say \"use this for outreach\"\n"
+        "\n"
+        "🆘 *Help*\n"
+        "  • menu — this menu\n"
+        "  • help — this menu"
+    )
 
 
 def preview_next(chat_id: str, n: int = 25) -> str:
@@ -130,14 +279,16 @@ def preview_next(chat_id: str, n: int = 25) -> str:
     preview = pending[:n]
     if not preview:
         return "No pending emails with send_delay_days=0."
-    lines = [f"{'Company':<30} | {'Email':<35} | {'DM':<25} | Subject"]
-    lines.append("-" * 120)
-    for s in preview:
-        co = (s.get("company_name") or "")[:28]
-        em = (s.get("to_email") or "")[:33]
-        dm = (s.get("to_name") or "")[:23]
-        subj = (s.get("subject") or "")[:40]
-        lines.append(f"{co:<30} | {em:<35} | {dm:<25} | {subj}")
+    lines = [f"Next {len(preview)} to send:", ""]
+    for i, s in enumerate(preview, 1):
+        co = (s.get("company_name") or "")[:30]
+        em = (s.get("to_email") or "")[:38]
+        dm = (s.get("to_name") or "").strip()
+        line = f"{i:>2}. {co}"
+        if dm:
+            line += f" — {dm[:25]}"
+        lines.append(line)
+        lines.append(f"    {em}")
     return "\n".join(lines)
 
 
@@ -191,14 +342,30 @@ def send_report(chat_id: str, period: str = "weekly") -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="Outreach status CLI")
-    parser.add_argument("--user-id", required=True, help="Telegram chat ID")
+    parser.add_argument("--user-id", required=False, default="", help="Telegram chat ID (not required for --menu)")
     parser.add_argument("--status", action="store_true", help="Show campaign status")
     parser.add_argument("--preview-next", type=int, default=0, help="Show next N pending emails")
     parser.add_argument("--sent", choices=["today", "yesterday"], help="Show sent emails for day")
     parser.add_argument("--show-failures", action="store_true", help="Show recent failures")
     parser.add_argument("--send-report", choices=["daily", "weekly"], help="Generate rollup report")
+    parser.add_argument("--show-files", action="store_true", help="Show file paths + sizes")
+    parser.add_argument("--view", choices=["sent", "pending", "failures", "runs"], help="Drill into a section")
+    parser.add_argument("--menu", action="store_true", help="Show full command menu")
     parser.add_argument("--notify-chat-id", default="", help="Send output to Telegram chat ID instead of stdout")
     args = parser.parse_args()
+
+    # --menu does not require user-id
+    if args.menu:
+        output = menu()
+        if args.notify_chat_id:
+            tn.send_message(args.notify_chat_id, output)
+        else:
+            print(output)
+        return
+
+    if not args.user_id:
+        print("ERROR: --user-id is required for this command.")
+        sys.exit(2)
 
     # Scope check
     env_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
@@ -211,22 +378,33 @@ def main():
         sys.exit(1)
 
     output = ""
+    use_codeblock = False
     if args.status:
         output = status(args.user_id)
+    elif args.show_files:
+        output = show_files(args.user_id)
+    elif args.view:
+        if args.view == "runs":
+            output = view_runs(args.user_id)
+        else:
+            output = view_section(args.user_id, args.view)
+        use_codeblock = True
     elif args.preview_next > 0:
         output = preview_next(args.user_id, args.preview_next)
+        use_codeblock = True
     elif args.sent:
         output = sent_on(args.user_id, args.sent)
+        use_codeblock = True
     elif args.show_failures:
         output = show_failures(args.user_id)
+        use_codeblock = True
     elif args.send_report:
         output = send_report(args.user_id, args.send_report)
     else:
         output = status(args.user_id)
 
     if args.notify_chat_id:
-        # Tabular outputs go as codeblock; plain text as markdown
-        if args.preview_next > 0 or args.show_failures:
+        if use_codeblock:
             tn.send_codeblock(args.notify_chat_id, output)
         else:
             tn.send_message(args.notify_chat_id, output)

@@ -186,10 +186,8 @@ def send_email_smtp(config: dict, to: str, subject: str, body: str,
     password = config.get("app_password", "")
     relay_mode = config.get("relay_mode", False)
 
-    footer = build_footer(compliance_cfg, sender_email=from_email) if compliance_cfg else ""
-    if footer:
-        body = body + footer
-
+    # Footer is rendered in the template (sequence_templates.py) with proper
+    # per-recipient {{unsubscribe_url}}. Do NOT append a second footer here.
     msg, msg_id = create_message(to, subject, body, from_name, from_email, parent_message_id)
     source = ('194.233.74.163', 0) if relay_mode else None
     try:
@@ -296,7 +294,9 @@ def send_one(config, to: str, subject: str, body: str, sender_name: str = ""):
 # ── Send Sequences from CSV ───────────────────────────────────────────────────
 
 def send_sequences_from_csv(sequences_csv: str, daily_limit: int = DEFAULT_DAILY_LIMIT,
-                            dry_run: bool = False):
+                            dry_run: bool = False, cli_sender_name: str = "",
+                            inter_send_delay_min: float = 30.0,
+                            inter_send_delay_max: float = 180.0):
     if not os.path.exists(sequences_csv):
         print(f"{Fore.RED}Error: Sequences file not found: {sequences_csv}{Style.RESET_ALL}")
         sys.exit(1)
@@ -322,10 +322,9 @@ def send_sequences_from_csv(sequences_csv: str, daily_limit: int = DEFAULT_DAILY
         return
 
     # ── Pre-send validation ────────────────────────────────────────────────
+    # sender_name may be empty when campaign signs as company only.
     val_errors = []
     for i, seq in enumerate(sequences, 1):
-        if not seq.get("sender_name", "").strip():
-            val_errors.append(f"Row {i}: sender_name is EMPTY")
         unfilled = PLACEHOLDER_PATTERN.findall(f"{seq.get('subject','')} {seq.get('body','')}")
         if unfilled:
             val_errors.append(f"Row {i} ({seq.get('company_name','?')}): Unfilled placeholders: {', '.join(set(unfilled))}")
@@ -348,7 +347,10 @@ def send_sequences_from_csv(sequences_csv: str, daily_limit: int = DEFAULT_DAILY
         return
 
     first_seq = sequences[0]
-    sender_name = first_seq.get("sender_name", email.split("@")[0].replace(".", " ").title())
+    sender_name = (first_seq.get("sender_name") or "").strip()
+    if not sender_name:
+        # Fall back to: --sender-name CLI arg, then sender_company in the row, then "Mirae Advisory"
+        sender_name = (cli_sender_name or "").strip() or (first_seq.get("sender_company") or "").strip() or "Mirae Advisory"
     sender_email = first_seq.get("sender_email", "").strip() or email
     campaign_name = os.path.basename(sequences_csv)
 
@@ -468,7 +470,12 @@ def send_sequences_from_csv(sequences_csv: str, daily_limit: int = DEFAULT_DAILY
                 status="failed",
             )
 
-        time.sleep(random.uniform(2, 3))
+        # Random inter-send pause to mimic human cadence and avoid relay throttling.
+        # Skips final email so we don't sleep after the batch is done.
+        if seq is not due[-1]:
+            pause = random.uniform(inter_send_delay_min, inter_send_delay_max)
+            print(f"{Fore.CYAN}⏱  Waiting {pause:.0f}s before next send...{Style.RESET_ALL}")
+            time.sleep(pause)
 
     save_state(state)
     _flush_csv(sequences_csv, sequences)
@@ -523,6 +530,10 @@ def main():
                         help="Override path for .outreach_state.json (per-user campaigns)")
     parser.add_argument("--config-file", default=None,
                         help="Override path for .workspace_smtp_config.json (per-user SMTP)")
+    parser.add_argument("--inter-send-delay-min", type=float, default=30.0,
+                        help="Minimum seconds between sends (random uniform; default 30)")
+    parser.add_argument("--inter-send-delay-max", type=float, default=180.0,
+                        help="Maximum seconds between sends (random uniform; default 180 = 3 min)")
     args = parser.parse_args()
 
     # Override module-level paths if CLI args provided
@@ -568,6 +579,9 @@ def main():
         sequences_csv=args.sequences,
         daily_limit=args.daily_limit,
         dry_run=args.dry_run,
+        cli_sender_name=args.sender_name or "",
+        inter_send_delay_min=args.inter_send_delay_min,
+        inter_send_delay_max=args.inter_send_delay_max,
     )
 
 

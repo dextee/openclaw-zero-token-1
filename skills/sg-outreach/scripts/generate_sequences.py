@@ -229,6 +229,14 @@ def main():
                         help="Campaign name for history tracking")
     parser.add_argument("--single", action="store_true",
                         help="Generate only email #1 (one-off send, no follow-ups)")
+    parser.add_argument("--filter-bouncers", dest="filter_bouncers", action="store_true",
+                        default=True, help="Skip rows whose email_verified flag indicates a likely bounce (default: on)")
+    parser.add_argument("--no-filter-bouncers", dest="filter_bouncers", action="store_false",
+                        help="Disable bounce filter (send to every row regardless of verification)")
+    parser.add_argument("--dedupe-by-email", dest="dedupe_by_email", action="store_true",
+                        default=True, help="Remove duplicate to_email rows, keeping highest-quality (default: on)")
+    parser.add_argument("--no-dedupe-by-email", dest="dedupe_by_email", action="store_false",
+                        help="Disable email deduplication")
     args = parser.parse_args()
 
     input_path = args.input
@@ -245,10 +253,8 @@ def main():
     }
 
     # ── Sender validation ───────────────────────────────────────────────────
-    if not sender["sender_name"]:
-        print(f"{Fore.RED}ERROR: --sender-name is required.{Style.RESET_ALL}")
-        print(f"{Fore.RED}The bot MUST ask the user: 'What sender name should I use?' before generating sequences.{Style.RESET_ALL}")
-        sys.exit(1)
+    # Empty sender_name is allowed — templates sign as company only ("Mirae Advisory").
+    # Templates no longer reference {{sender_name}}, so empty is safe.
 
     # Read enriched CSV
     with open(input_path, "r", encoding="utf-8-sig") as f:
@@ -260,6 +266,56 @@ def main():
 
     # Filter by valid email
     rows = [r for r in rows if any(r.get(col, "").strip() for col in ("email", "Email", "EMAIL"))]
+
+    # ── Bounce filter (default ON) ──────────────────────────────────────────
+    # Skip rows whose email_verified flag indicates a likely bounce. Requires that
+    # the source CSV has been run through sg-verify (adds email_verified +
+    # email_status_detail columns). If columns are absent, this filter is a no-op.
+    if args.filter_bouncers and rows and "email_verified" in rows[0]:
+        BOUNCE_VERDICTS = {"no_mx", "false", "invalid_format"}
+        BOUNCE_DETAIL_PREFIXES = ("Server unreachable",)
+        before = len(rows)
+        kept = []
+        skipped = {"no_mx": 0, "false": 0, "invalid_format": 0, "server_unreachable": 0}
+        for r in rows:
+            v = (r.get("email_verified") or "").strip()
+            d = (r.get("email_status_detail") or "").strip()
+            if v in BOUNCE_VERDICTS:
+                skipped[v] = skipped.get(v, 0) + 1
+                continue
+            if any(d.startswith(p) for p in BOUNCE_DETAIL_PREFIXES):
+                skipped["server_unreachable"] += 1
+                continue
+            kept.append(r)
+        rows = kept
+        dropped = before - len(rows)
+        print(f"{Fore.CYAN}🛡️  Bounce filter: kept {len(rows)} / dropped {dropped} "
+              f"(no_mx={skipped['no_mx']}, false={skipped['false']}, "
+              f"invalid_format={skipped['invalid_format']}, "
+              f"server_unreachable={skipped['server_unreachable']}){Style.RESET_ALL}")
+    elif args.filter_bouncers:
+        print(f"{Fore.YELLOW}⚠️  --filter-bouncers requested but source CSV has no 'email_verified' column. "
+              f"Run sg-verify first to filter bouncers.{Style.RESET_ALL}")
+
+    # ── Deduplicate by to_email, keeping highest-quality row ────────────────
+    if args.dedupe_by_email and rows:
+        QUALITY = {"true": 0, "catch_all": 1, "unverifiable": 2}
+        before = len(rows)
+        best = {}
+        for r in rows:
+            em = (r.get("email") or "").strip().lower()
+            if not em:
+                continue
+            v = (r.get("email_verified") or "").strip()
+            rank = QUALITY.get(v, 99)
+            if em not in best or rank < QUALITY.get((best[em].get("email_verified") or "").strip(), 99):
+                best[em] = r
+        rows = list(best.values())
+        # Sort: highest quality first (true → catch_all → unverifiable → unknown)
+        rows.sort(key=lambda r: QUALITY.get((r.get("email_verified") or "").strip(), 99))
+        dedup_dropped = before - len(rows)
+        if dedup_dropped > 0:
+            print(f"{Fore.CYAN}🔁 Deduplicated: kept {len(rows)} unique emails / dropped {dedup_dropped} duplicate(s).{Style.RESET_ALL}")
 
     # ── Global history deduplication check ───────────────────────────────────
     campaign_name = args.campaign_name or os.path.basename(args.output or "")
