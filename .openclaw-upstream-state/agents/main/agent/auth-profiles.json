@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "profiles": {
+    "qwen-web:default": {
+      "type": "token",
+      "provider": "qwen-web",
+      "token": "{\"sessionToken\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjIxYWQwMzdlLWMzYjYtNGFhOC1iNzkzLTE5NTEzMTA4NTkyNCIsImxhc3RfcGFzc3dvcmRfY2hhbmdlIjoxNzc1NjM2MTg0LCJleHAiOjE3NzgyNjk0NjR9.FzhZ1yBKol7mv4JixthxJMwNvOaxN_eCbLYJ-UF8YpM\",\"cookie\":\"acw_tc=0a03e59817756774489396870e1466ea998735b7aad350628fb11dc56454ce; x-ap=ap-southeast-1; sca=282e06d1; cna=EJ5dIvZ/8TMCAcLpSqOZKgOm; _bl_uid=16mn5nI9qhRghgiX6ewOeRRbUFhL; qwen-theme=light; qwen-locale=en-US; xlly_s=1; cnaui=21ad037e-c3b6-4aa8-b793-195131085924; aui=21ad037e-c3b6-4aa8-b793-195131085924; token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjIxYWQwMzdlLWMzYjYtNGFhOC1iNzkzLTE5NTEzMTA4NTkyNCIsImxhc3RfcGFzc3dvcmRfY2hhbmdlIjoxNzc1NjM2MTg0LCJleHAiOjE3NzgyNjk0NjR9.FzhZ1yBKol7mv4JixthxJMwNvOaxN_eCbLYJ-UF8YpM; atpsida=edd10c6445166584883ee03e_1775677464_4; tfstk=gWYtgV0o3uf6jZ3IePmHonnQHcGH6DAaSdR7otXgcppphdGaoIsghrpdKfRG5EKUkQR2Sf7m_NRNuZMoE4ck_C7qzgtnzvAIGs7A1xZHt3ONuZM34yesWCJgqT6RfZGdRs1b1Zs1fyGd_1_b5ia_AJ6FGZ_fcs6Cd1f51R1fhXdCLs_fhK_j9w6FGZ6XhZ_XLlB_11UvAtku1GUEyzzyJ1IOHl6Lkzhc6GBW19HSFe3VXTO1prMtbVQ1C_TSKl5RXKIB-IVuoeIrKUY8CF2lesqs9XE40G1eVxELKGW0lFfdEfPa0oScT6Bo9Yq40G1F9TcZxorVm65..; isg=BISEfsnysaGqIQVt_gWbtel1VQt2nagHA0ZceJ4lFM8SySSTxqvZl6BrDXsRUeBf; ssxmod_itna=1-iqGx2DcCG=MGG0QGCDm6Dp=xIxeqQKn4GHDyhcxQHP08D6DYqGdDuYkDCTc7ttR4tCD02DxPnKhnDD/bQ4qDyCxA3DT=Rpx7eBxn74I82=20Y7VYnCxhnvHyCG0PdhhkOknfOTNs4CnUMUr0OeD74GnG4GSDDNDDhrgDBd5KheAbhtuKGUxKhdUiAo8QiAo3GI3ugnWvDx7YE54K7jKYjQU01eDGSTsg8DqYxGwDB6_xBQD7qq5xYoA/iIreRQIbMSIb457=8xhKw5z4SvGY35eYehoI0xUscH7I7exD; ssxmod_itna2=1-iqGx2DcCG=MGG0QGCDm6Dp=xIxeqQKn4GHDyhcxQHP08D6DYqGdDuYkDCTc7ttR4tCD02DxPnKheDWwYQfgTAt18GH0sxoIqxtEzoYD\",\"userAgent\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36\"}"
+    },
+    "deepseek-web:default": {
+      "type": "token",
+      "provider": "deepseek-web",
+      "token": "{\"cookie\":\"aws-waf-token=1af39064-e35c-4182-b564-2c456def7022:BgoAmqaFY10XAAAA:llF9N9gzwCR3gj2nffKKtRVAXln62IDM3U1tVscst8g0L3Xa/rIY66XauOFCCFFYn1tErfAjgD0N9ASP6vaGTpfJiezQPWd2F5b1qvQP4MWRzpNy3oQ6CB+vPxFFuG07avoe6M21RJduHj3V47V+qwm25EVynZCrkrC8ciE23vC3w9CC6UsfCbIKN8vGTH4=; smidV2=20260408210622528c2af1406ca32af790478f67e42ade00684519ac9119af0; .thumbcache_6b2e5483f9d858d7c661c5e276b6a6ae=Aw/1HeaZTMlwFesbDBPXrm6LcVlflNagKCgd2Qz4lnpD2eZruSGCCsfsKVks8eP0UVmR1emMpd1KtFQPQn0TWA%3D%3D; ds_session_id=c51fe523c9ad4b1eac9a410dd14aa025\",\"bearer\":\"Y9+BCR4MMs2rnSIPMpidNidmjgQuQnBgDGrL5j2WefWiHh1YA/NU2APayD+VHhGC\",\"userAgent\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36\"}"
+    },
+    "openai-codex:default": {
+      "type": "oauth",
+      "provider": "openai-codex",
+      "access": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE5MzQ0ZTY1LWJiYzktNDRkMS1hOWQwLWY5NTdiMDc5YmQwZSIsInR5cCI6IkpXVCJ9.eyJhdWQiOlsiaHR0cHM6Ly9hcGkub3BlbmFpLmNvbS92MSJdLCJjbGllbnRfaWQiOiJhcHBfRU1vYW1FRVo3M2YwQ2tYYVhwN2hyYW5uIiwiZXhwIjoxNzc2NTk3Nzc4LCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiMjc3ZTk2OWItNzY4OC00MmFiLThlZWEtNDQxYmRiMjBmMGMyIiwiY2hhdGdwdF9hY2NvdW50X3VzZXJfaWQiOiJ1c2VyLW1zdlhqVUhsRWFPR0w0UWdWckJNZ2p3Sl9fMjc3ZTk2OWItNzY4OC00MmFiLThlZWEtNDQxYmRiMjBmMGMyIiwiY2hhdGdwdF9jb21wdXRlX3Jlc2lkZW5jeSI6Im5vX2NvbnN0cmFpbnQiLCJjaGF0Z3B0X3BsYW5fdHlwZSI6InBsdXMiLCJjaGF0Z3B0X3VzZXJfaWQiOiJ1c2VyLW1zdlhqVUhsRWFPR0w0UWdWckJNZ2p3SiIsInVzZXJfaWQiOiJ1c2VyLW1zdlhqVUhsRWFPR0w0UWdWckJNZ2p3SiJ9LCJodHRwczovL2FwaS5vcGVuYWkuY29tL3Byb2ZpbGUiOnsiZW1haWwiOiJtZWRuZWZpdHNtYXJrZXRpbmdAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWV9LCJpYXQiOjE3NzU3MzM3NzcsImlzcyI6Imh0dHBzOi8vYXV0aC5vcGVuYWkuY29tIiwianRpIjoiNDgwYmIzOGQtNGQyNy00MjY2LTkyZTgtZDJmMjA4ZjMxMWE4IiwibmJmIjoxNzc1NzMzNzc3LCJwd2RfYXV0aF90aW1lIjoxNzc1NzMzNzU5NjIwLCJzY3AiOlsib3BlbmlkIiwicHJvZmlsZSIsImVtYWlsIiwib2ZmbGluZV9hY2Nlc3MiXSwic2Vzc2lvbl9pZCI6ImF1dGhzZXNzXzRReDhPUUNNVGlnVnNtWlphQ2p6a2x5aiIsInNsIjp0cnVlLCJzdWIiOiJnb29nbGUtb2F1dGgyfDEwNTU2NTYyNzA1NDg2MzMxMjk0MSJ9.lSLaJzoILilBrZ0RUGf2sWYuwM3s-u9Ys0Gyq3osqgrtut3RJlpFTZFAOePxxViGQaQYXQP7NduDe8qZtSN8CuE9Pcn83mN9b9p8-6lUAeQfzjUV6HqrQ4KmfVjBtmZ0et2E-T72oB6IgYqlZ8ap1C4ZVicPpJAkCQPgr1ctoHBpPM8hVa265uFaCtYNu74l8jn9eKwUsCsZp8EJulnEqITb_8RSGry6FucPDfj0k6Nh-CgqElg5VuwClvrkbcFbW7xjh3qIBJJmCpTpgR7o6x-0Ui3g5RJYYn6HxvvKA-qnFM8LCQjSoUGuUOy30Bk9XeyuBhyvvbILqovBsiBHF-zmqxpTouK5_0eoyh4q_2BZDijyNSHbgGLyvJHHcnGRtNyIFgoAcdhQA28CuZIQPf2zOlgKjsrz_mia8-vdoxICLUQ4bXh_L1rqce5bfDI-BqObA72gBtl4Pe4neXf45AX6o2z9I9Xwjhj8_ovJe_uVDQ7Kk-mZ9MClNkb-MNlEtuozqntmN8CPX6_OdqsjTUu80W7670wVlovBOxDF78rzHKDiHs7-xDWoIBiAhRSCMQyYheowIRZEWy_qZFhLEY7PdXELG1ECjxeN8flGoV_tjCFEjwAuB9VNuL2qblgdwXozUYUPW4rkL-OqBVejrGAGIespchk2q2b3nO9QNSM",
+      "refresh": "rt_F0LOdwP9u06n3cpj7hbrZZTKOXHuRVZb8rD_vAD6mEA.AbcfNrFDaLoQQfhdomrKLarOUx02tTvURvvqqIm2uDk",
+      "expires": 1776597778000,
+      "accountId": "277e969b-7688-42ab-8eea-441bdb20f0c2"
+    }
+  },
+  "lastGood": {
+    "qwen-web": "qwen-web:default",
+    "deepseek-web": "deepseek-web:default"
+  },
+  "usageStats": {
+    "qwen-web:default": {
+      "errorCount": 0,
+      "lastUsed": 1775755027915
+    },
+    "deepseek-web:default": {
+      "errorCount": 0,
+      "lastUsed": 1777620550633
+    }
+  }
+}

@@ -1,0 +1,148 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.3.28",
+    "lastTouchedAt": "2026-04-09T01:06:55.784Z"
+  },
+  "browser": {
+    "attachOnly": true,
+    "defaultProfile": "openclaw",
+    "profiles": {
+      "openclaw": {
+        "cdpUrl": "http://127.0.0.1:9222",
+        "color": "#4285F4"
+      }
+    }
+  },
+  "ui": {
+    "assistant": {
+      "name": "OpenClaw",
+      "avatar": "\ud83e\udd9e"
+    }
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {}
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "deepseek-web/deepseek-v4",
+        "fallbacks": [
+          "deepseek-web/deepseek-chat",
+          "deepseek-web/deepseek-reasoner",
+          "qwen-web/qwen3.5-plus",
+          "qwen-web/qwen3.6-plus"
+        ]
+      },
+      "models": {
+        "qwen-web/qwen3.5-plus": {
+          "alias": "Qwen 3.5 Plus"
+        },
+        "qwen-web/qwen3.6-plus": {
+          "alias": "Qwen 3.6 Plus"
+        },
+        "deepseek-web/deepseek-chat": {
+          "alias": "DeepSeek V3"
+        },
+        "deepseek-web/deepseek-v4": {
+          "alias": "DeepSeek V4"
+        },
+        "deepseek-web/deepseek-reasoner": {
+          "alias": "DeepSeek R1"
+        }
+      },
+      "workspace": "~/.openclaw/workspace",
+      "compaction": {
+        "mode": "safeguard"
+      },
+      "sandbox": {
+        "mode": "off"
+      },
+      "timeoutSeconds": 1800
+    }
+  },
+  "tools": {
+    "profile": "full",
+    "allow": [
+      "exec",
+      "read",
+      "write",
+      "edit",
+      "web_search",
+      "web_fetch",
+      "message",
+      "sessions_list",
+      "sessions_history",
+      "sessions_send",
+      "session_status"
+    ],
+    "sessions": {
+      "visibility": "all"
+    },
+    "elevated": {
+      "enabled": true
+    },
+    "exec": {
+      "backgroundMs": 270000,
+      "timeoutSec": 300
+    },
+    "fs": {
+      "workspaceOnly": false
+    }
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "open",
+      "botToken": "8686771791:AAFMmAvxxSd3m2aqX1vmD-DICo36L0T6Zes",
+      "groups": {
+        "*": {
+          "requireMention": true
+        }
+      },
+      "allowFrom": [
+        "*"
+      ],
+      "groupPolicy": "allowlist",
+      "streaming": "partial"
+    }
+  },
+  "gateway": {
+    "port": 3001,
+    "mode": "local",
+    "bind": "loopback",
+    "auth": {
+      "mode": "token",
+      "token": "62b791625fa441be036acd3c206b7e14e2bb13c803355823"
+    },
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    },
+    "http": {
+      "endpoints": {
+        "chatCompletions": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  "skills": {
+    "load": {
+      "extraDirs": [
+        "/root/openclaw-zero-token/skills"
+      ]
+    }
+  },
+  "discovery": {
+    "mdns": {
+      "mode": "off"
+    }
+  }
+}
