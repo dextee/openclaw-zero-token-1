@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Deliverability — SG Portal{% endblock %}
+{% block content %}
+<h2 class="mb-4">Email Deliverability</h2>
+
+<div class="row g-3 mb-4">
+  {% for check, data in report.items() %}
+  <div class="col-md-3">
+    <div class="card kpi-card p-3">
+      <div class="text-muted small text-uppercase">{{ check }}</div>
+      <div class="fs-4 fw-bold {% if data.status == 'ok' %}health-green{% elif data.status == 'unknown' %}text-muted{% else %}health-red{% endif %}">
+        {{ data.status | title }}
+      </div>
+      <div class="small text-muted">{{ data.detail }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<h4 class="mb-3">Suppression List ({{ suppressions | length }} entries)</h4>
+<div class="table-responsive">
+  <table class="table table-sm table-hover bg-white rounded shadow-sm">
+    <thead><tr><th>Email</th><th>Reason</th><th>Date</th></tr></thead>
+    <tbody>
+      {% for s in suppressions %}
+      <tr>
+        <td>{{ s.email }}</td>
+        <td>{{ s.reason }}</td>
+        <td>{{ s.date }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="text-muted">No suppressions</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

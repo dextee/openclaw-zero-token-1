@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — SG Portal{% endblock %}
+{% block content %}
+<h2 class="mb-4">Dashboard</h2>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card kpi-card p-3">
+      <div class="text-muted small">Total Leads</div>
+      <div class="fs-2 fw-bold">{{ data.total_leads | fmt_int }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card kpi-card p-3">
+      <div class="text-muted small">Total Files</div>
+      <div class="fs-2 fw-bold">{{ data.total_files | fmt_int }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card kpi-card p-3">
+      <div class="text-muted small">Pipeline Health</div>
+      <div class="fs-2 fw-bold health-{{ data.health.color }}">{{ data.health.status | title }}</div>
+      <div class="small text-muted">{{ data.health.message }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card kpi-card p-3">
+      <div class="text-muted small">Stages</div>
+      {% for stage, count in data.by_stage.items() %}
+        <span class="badge stage-badge-{{ stage }} me-1">{{ stage }}: {{ count | fmt_int }}</span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<h4 class="mb-3">Recent Uploads</h4>
+<div class="table-responsive">
+  <table class="table table-sm table-hover bg-white rounded shadow-sm">
+    <thead><tr><th>Filename</th><th>Stage</th><th>Rows</th><th>Date</th></tr></thead>
+    <tbody>
+      {% for u in data.recent_uploads %}
+      <tr>
+        <td>{{ u.filename }}</td>
+        <td><span class="badge stage-badge-{{ u.stage }}">{{ u.stage }}</span></td>
+        <td>{{ u.rows | fmt_int }}</td>
+        <td class="text-muted">{{ u.mtime[:19] }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="text-muted">No recent uploads</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

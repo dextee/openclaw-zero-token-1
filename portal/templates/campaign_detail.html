@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ campaign.name }} — Campaign{% endblock %}
+{% block content %}
+<h2 class="mb-2">{{ campaign.name }}</h2>
+<div class="mb-3 text-muted">Status: <span class="badge bg-secondary">{{ campaign.status }}</span></div>
+
+<div class="card p-3 mb-3">
+  <h5>Campaign State</h5>
+  <pre class="bg-light p-2 rounded"><code>{% for k, v in state.items() %}{{ k }}: {{ v }}
+{% endfor %}</code></pre>
+</div>
+
+<div class="mb-3">
+  {% if not approved %}
+  <form method="post" action="/portal/campaigns/{{ campaign.file_id }}/approve" class="d-inline">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-success">Approve Campaign</button>
+  </form>
+  {% else %}
+  <span class="badge bg-success">Approved</span>
+  {% endif %}
+</div>
+
+<h5>Leads ({{ rows | length }})</h5>
+<div class="table-responsive">
+  <table class="table table-sm table-hover bg-white rounded shadow-sm">
+    <thead>
+      <tr>
+        {% if rows %}
+          {% set cols = rows[0].keys() | list %}
+          {% for col in cols[:12] %}<th>{{ col }}</th>{% endfor %}
+        {% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        {% set cols = row.keys() | list %}
+        {% for col in cols[:12] %}<td>{{ row.get(col, '') }}</td>{% endfor %}
+      </tr>
+      {% else %}
+      <tr><td colspan="12" class="text-muted text-center">No leads</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

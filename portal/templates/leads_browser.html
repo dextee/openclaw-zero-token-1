@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Leads — SG Portal{% endblock %}
+{% block content %}
+<h2 class="mb-4">Lead Files</h2>
+
+<div class="mb-3">
+  <a href="/portal/leads" class="btn btn-sm btn-outline-secondary {% if not stage_filter %}active{% endif %}">All</a>
+  <a href="/portal/leads?stage=leadgen" class="btn btn-sm btn-outline-primary {% if stage_filter == 'leadgen' %}active{% endif %}">Leadgen</a>
+  <a href="/portal/leads?stage=enriched" class="btn btn-sm btn-outline-success {% if stage_filter == 'enriched' %}active{% endif %}">Enriched</a>
+  <a href="/portal/leads?stage=verified" class="btn btn-sm btn-outline-warning {% if stage_filter == 'verified' %}active{% endif %}">Verified</a>
+  <a href="/portal/leads?stage=outreach" class="btn btn-sm btn-outline-info {% if stage_filter == 'outreach' %}active{% endif %}">Outreach</a>
+</div>
+
+<div class="row g-3">
+  {% for f in files %}
+  <div class="col-md-4">
+    <a href="/portal/leads/{{ f.path | file_id }}" class="text-decoration-none">
+      <div class="card kpi-card h-100 p-3">
+        <div class="d-flex justify-content-between align-items-start">
+          <span class="badge stage-badge-{{ f.stage }}">{{ f.stage }}</span>
+          <small class="text-muted">{{ f.row_count | fmt_int }} rows</small>
+        </div>
+        <div class="mt-2 fw-semibold text-dark">{{ f.filename }}</div>
+        <small class="text-muted">{{ f.mtime.isoformat()[:19] }}</small>
+      </div>
+    </a>
+  </div>
+  {% else %}
+  <div class="col-12 text-muted">No lead files found.</div>
+  {% endfor %}
+</div>
+{% endblock %}

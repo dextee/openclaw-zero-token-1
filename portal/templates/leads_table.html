@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}{{ lead_file.filename }} — Leads{% endblock %}
+{% block content %}
+<h2 class="mb-2">{{ lead_file.filename }}</h2>
+<div class="mb-3 text-muted">
+  <span class="badge stage-badge-{{ lead_file.stage }}">{{ lead_file.stage }}</span>
+  {{ lead_file.row_count | fmt_int }} rows |
+  {{ summary.with_email | fmt_int }} with email |
+  Tier: A={{ summary.by_tier.A }} B={{ summary.by_tier.B }} C={{ summary.by_tier.C }} D={{ summary.by_tier.D }}
+</div>
+
+<div class="card p-3 mb-3">
+  <form method="get" class="row g-2 align-items-end" id="filter-form"
+        hx-get="/portal/leads/{{ file_id }}"
+        hx-target="#lead-rows"
+        hx-swap="outerHTML"
+        hx-push-url="true"
+        hx-trigger="change from:select, change from:input[type=number], change from:input[type=checkbox], submit">
+    <input type="hidden" name="sort_col" value="{{ sort_col }}">
+    <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
+    <div class="col-md-3">
+      <input type="text" name="q" class="form-control" placeholder="Search..." value="{{ q }}">
+    </div>
+    <div class="col-md-2">
+      <select name="sendability" class="form-select">
+        <option value="">All sendability</option>
+        <option value="verified" {% if sendability == 'verified' %}selected{% endif %}>Verified</option>
+        <option value="risky" {% if sendability == 'risky' %}selected{% endif %}>Risky</option>
+        <option value="bad" {% if sendability == 'bad' %}selected{% endif %}>Bad</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <select name="tier" class="form-select">
+        <option value="">All tiers</option>
+        <option value="A" {% if tier == 'A' %}selected{% endif %}>A</option>
+        <option value="B" {% if tier == 'B' %}selected{% endif %}>B</option>
+        <option value="C" {% if tier == 'C' %}selected{% endif %}>C</option>
+        <option value="D" {% if tier == 'D' %}selected{% endif %}>D</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <input type="number" name="min_score" class="form-control" placeholder="Min score" value="{{ min_score or '' }}">
+    </div>
+    <div class="col-md-2">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="has_email" value="1" id="has_email" {% if has_email == '1' %}checked{% endif %}>
+        <label class="form-check-label" for="has_email">Has email</label>
+      </div>
+    </div>
+    <div class="col-md-1">
+      <button type="submit" class="btn btn-primary w-100">Filter</button>
+    </div>
+  </form>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <div>
+    <a href="/api/v1/export/{{ file_id }}?q={{ q | urlencode }}&sendability={{ sendability }}&tier={{ tier }}&min_score={{ min_score }}&has_email={{ has_email }}&sort_col={{ sort_col }}&sort_dir={{ sort_dir }}" class="btn btn-sm btn-outline-success">Export CSV</a>
+    <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteSelected()">Delete Selected</button>
+  </div>
+  <div class="text-muted">{{ total | fmt_int }} results</div>
+</div>
+
+<form id="bulk-delete-form" method="post" action="/portal/leads/{{ file_id }}/delete-rows">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <input type="hidden" name="row_hashes" id="row-hashes" value="">
+</form>
+
+<div id="lead-rows">
+  {% include "partials/lead_rows.html" %}
+</div>
+
+<script>
+function toggleAll(source) {
+  document.querySelectorAll('.row-check').forEach(cb => cb.checked = source.checked);
+}
+function deleteSelected() {
+  const hashes = Array.from(document.querySelectorAll('.row-check:checked')).map(cb => cb.value).join(',');
+  if (!hashes) { alert('No rows selected'); return; }
+  if (!confirm('Delete ' + hashes.split(',').length + ' rows?')) return;
+  document.getElementById('row-hashes').value = hashes;
+  document.getElementById('bulk-delete-form').submit();
+}
+</script>
+{% endblock %}

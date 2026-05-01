@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Campaigns — SG Portal{% endblock %}
+{% block content %}
+<h2 class="mb-4">Campaigns</h2>
+<div class="row g-3">
+  {% for c in campaigns %}
+  <div class="col-md-4">
+    <div class="card kpi-card p-3">
+      <div class="d-flex justify-content-between">
+        <span class="badge bg-secondary">{{ c.status }}</span>
+        <small class="text-muted">{{ c.created.isoformat()[:10] }}</small>
+      </div>
+      <h5 class="mt-2"><a href="/portal/campaigns/{{ c.file_id }}" class="text-decoration-none">{{ c.name }}</a></h5>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-12 text-muted">No campaigns found.</div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Upload — SG Portal{% endblock %}
+{% block content %}
+<h2 class="mb-4">Upload Leads</h2>
+
+<div class="card p-4" style="max-width: 500px;">
+  <form method="post" action="/portal/upload" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <div class="mb-3">
+      <label class="form-label">CSV File</label>
+      <input type="file" name="file" class="form-control" accept=".csv" required>
+      <div class="form-text">Max 10MB, max 100k rows.</div>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Stage</label>
+      <select name="stage" class="form-select">
+        <option value="leadgen">Leadgen</option>
+        <option value="enriched">Enriched</option>
+        <option value="verified">Verified</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Upload</button>
+  </form>
+</div>
+{% endblock %}

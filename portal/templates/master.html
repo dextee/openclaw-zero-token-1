@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Master Enrichment — SG Portal{% endblock %}
+{% block content %}
+<h2 class="mb-4">Master Enrichment</h2>
+
+<div class="table-responsive mb-4">
+  <table class="table table-sm table-hover bg-white rounded shadow-sm">
+    <thead>
+      <tr><th>Industry</th><th>Files</th><th>Total Leads</th><th>Last Updated</th></tr>
+    </thead>
+    <tbody>
+      {% for stat in stats %}
+      <tr>
+        <td>{{ stat.industry }}</td>
+        <td>{{ stat.file_count | fmt_int }}</td>
+        <td>{{ stat.total_leads | fmt_int }}</td>
+        <td class="text-muted">{{ stat.last_updated.isoformat()[:19] if stat.last_updated else '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="text-muted">No master stats available</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<button class="btn btn-primary" onclick="startEnrichment()">Start Enrichment</button>
+
+<div id="sse-output" class="mt-3 font-monospace bg-dark text-light p-3 rounded" style="height:300px; overflow:auto; display:none;"></div>
+
+<script>
+function startEnrichment() {
+  var out = document.getElementById('sse-output');
+  out.style.display = 'block';
+  out.innerHTML = '';
+  var evtSource = new EventSource('/portal/master/enrich-stream');
+  evtSource.onmessage = function(e) {
+    var line = document.createElement('div');
+    line.textContent = e.data;
+    out.appendChild(line);
+    out.scrollTop = out.scrollHeight;
+  };
+  evtSource.onerror = function() {
+    evtSource.close();
+    var line = document.createElement('div');
+    line.textContent = '[STREAM CLOSED]';
+    out.appendChild(line);
+  };
+}
+</script>
+{% endblock %}
