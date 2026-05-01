@@ -1,16 +1,17 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
-  <title>Not Found — SG Portal</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <title>Not Found — SG Pipeline</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>body{background:#09090b;color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}</style>
 </head>
-<body class="d-flex align-items-center justify-content-center" style="height:100vh; background:#f8f9fa;">
+<body class="min-h-screen flex items-center justify-center">
   <div class="text-center">
-    <h1 class="display-4">404</h1>
-    <p class="lead">Page Not Found</p>
-    <p class="text-muted">{{ detail }}</p>
-    <a href="/portal/dashboard" class="btn btn-primary">Back to Dashboard</a>
+    <div class="text-6xl font-bold text-zinc-800 mb-2">404</div>
+    <h1 class="text-xl font-semibold text-zinc-100 mb-2">Page Not Found</h1>
+    <p class="text-zinc-500 mb-6">{{ detail }}</p>
+    <a href="/portal/dashboard" class="inline-flex px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-sm rounded border border-amber-500/20 transition-colors">Back to Dashboard</a>
   </div>
 </body>
 </html>

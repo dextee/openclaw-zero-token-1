@@ -1,25 +1,31 @@
 {% extends "base.html" %}
-{% block title %}Upload — SG Portal{% endblock %}
+{% block title %}Upload — SG Pipeline{% endblock %}
 {% block content %}
-<h2 class="mb-4">Upload Leads</h2>
+<h1 class="text-2xl font-bold text-zinc-100 mb-6">Upload Leads</h1>
 
-<div class="card p-4" style="max-width: 500px;">
-  <form method="post" action="/portal/upload" enctype="multipart/form-data">
-    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-    <div class="mb-3">
-      <label class="form-label">CSV File</label>
-      <input type="file" name="file" class="form-control" accept=".csv" required>
-      <div class="form-text">Max 10MB, max 100k rows.</div>
-    </div>
-    <div class="mb-3">
-      <label class="form-label">Stage</label>
-      <select name="stage" class="form-select">
-        <option value="leadgen">Leadgen</option>
-        <option value="enriched">Enriched</option>
-        <option value="verified">Verified</option>
-      </select>
-    </div>
-    <button type="submit" class="btn btn-primary">Upload</button>
-  </form>
+<div class="max-w-lg">
+  <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+    <form method="post" action="/portal/upload" enctype="multipart/form-data">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <div class="mb-5">
+        <label class="block text-sm font-medium text-zinc-300 mb-2">CSV File</label>
+        <input type="file" name="file" accept=".csv" required
+               class="block w-full text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-zinc-800 file:text-zinc-300 hover:file:bg-zinc-700">
+        <p class="mt-2 text-xs text-zinc-600">Max 10MB, max 100k rows.</p>
+      </div>
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-zinc-300 mb-2">Stage</label>
+        <select name="stage"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-300 focus:outline-none focus:border-zinc-600">
+          <option value="leadgen">Leadgen</option>
+          <option value="enriched">Enriched</option>
+          <option value="verified">Verified</option>
+        </select>
+      </div>
+      <button type="submit" class="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-sm rounded border border-amber-500/20 transition-colors">
+        Upload
+      </button>
+    </form>
+  </div>
 </div>
 {% endblock %}

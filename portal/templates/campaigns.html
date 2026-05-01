@@ -1,20 +1,21 @@
 {% extends "base.html" %}
-{% block title %}Campaigns — SG Portal{% endblock %}
+{% block title %}Campaigns — SG Pipeline{% endblock %}
 {% block content %}
-<h2 class="mb-4">Campaigns</h2>
-<div class="row g-3">
+<h1 class="text-2xl font-bold text-zinc-100 mb-6">Campaigns</h1>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
   {% for c in campaigns %}
-  <div class="col-md-4">
-    <div class="card kpi-card p-3">
-      <div class="d-flex justify-content-between">
-        <span class="badge bg-secondary">{{ c.status }}</span>
-        <small class="text-muted">{{ c.created.isoformat()[:10] }}</small>
-      </div>
-      <h5 class="mt-2"><a href="/portal/campaigns/{{ c.file_id }}" class="text-decoration-none">{{ c.name }}</a></h5>
+  <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-700 transition-colors">
+    <div class="flex items-center justify-between mb-3">
+      <span class="inline-flex px-2 py-0.5 rounded text-xs font-medium border status-{{ c.status }}">{{ c.status }}</span>
+      <span class="text-zinc-600 text-xs">{{ c.created.isoformat()[:10] }}</span>
     </div>
+    <h3 class="text-zinc-100 font-medium text-base mb-1">
+      <a href="/portal/campaigns/{{ c.file_id }}" class="hover:text-amber-400 transition-colors">{{ c.name }}</a>
+    </h3>
   </div>
   {% else %}
-  <div class="col-12 text-muted">No campaigns found.</div>
+  <div class="col-span-full text-zinc-500 text-center py-12">No campaigns found.</div>
   {% endfor %}
 </div>
 {% endblock %}

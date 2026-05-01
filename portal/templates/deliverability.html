@@ -1,37 +1,44 @@
 {% extends "base.html" %}
-{% block title %}Deliverability — SG Portal{% endblock %}
+{% block title %}Deliverability — SG Pipeline{% endblock %}
 {% block content %}
-<h2 class="mb-4">Email Deliverability</h2>
+<h1 class="text-2xl font-bold text-zinc-100 mb-6">Email Deliverability</h1>
 
-<div class="row g-3 mb-4">
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
   {% for check, data in report.items() %}
-  <div class="col-md-3">
-    <div class="card kpi-card p-3">
-      <div class="text-muted small text-uppercase">{{ check }}</div>
-      <div class="fs-4 fw-bold {% if data.status == 'ok' %}health-green{% elif data.status == 'unknown' %}text-muted{% else %}health-red{% endif %}">
-        {{ data.status | title }}
-      </div>
-      <div class="small text-muted">{{ data.detail }}</div>
+  <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+    <div class="text-zinc-500 text-xs uppercase tracking-wider mb-2">{{ check }}</div>
+    <div class="text-2xl font-bold
+      {% if data.status == 'ok' %}text-emerald-400{% elif data.status == 'unknown' %}text-zinc-500{% else %}text-red-400{% endif %}">
+      {{ data.status | title }}
     </div>
+    <div class="text-zinc-600 text-xs mt-2">{{ data.detail }}</div>
   </div>
   {% endfor %}
 </div>
 
-<h4 class="mb-3">Suppression List ({{ suppressions | length }} entries)</h4>
-<div class="table-responsive">
-  <table class="table table-sm table-hover bg-white rounded shadow-sm">
-    <thead><tr><th>Email</th><th>Reason</th><th>Date</th></tr></thead>
-    <tbody>
-      {% for s in suppressions %}
-      <tr>
-        <td>{{ s.email }}</td>
-        <td>{{ s.reason }}</td>
-        <td>{{ s.date }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="3" class="text-muted">No suppressions</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<h2 class="text-lg font-semibold text-zinc-100 mb-4">Suppression List ({{ suppressions | length }} entries)</h2>
+<div class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm text-left">
+      <thead class="bg-zinc-800/60 border-b border-zinc-800">
+        <tr>
+          <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Email</th>
+          <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Reason</th>
+          <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Date</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-zinc-800/40">
+        {% for s in suppressions %}
+        <tr class="hover:bg-zinc-800/30 transition-colors">
+          <td class="px-5 py-3.5 text-zinc-300">{{ s.email }}</td>
+          <td class="px-5 py-3.5 text-zinc-400">{{ s.reason }}</td>
+          <td class="px-5 py-3.5 text-zinc-500">{{ s.date }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="px-5 py-8 text-zinc-500 text-center">No suppressions</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}

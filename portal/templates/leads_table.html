@@ -1,16 +1,20 @@
 {% extends "base.html" %}
 {% block title %}{{ lead_file.filename }} — Leads{% endblock %}
 {% block content %}
-<h2 class="mb-2">{{ lead_file.filename }}</h2>
-<div class="mb-3 text-muted">
-  <span class="badge stage-badge-{{ lead_file.stage }}">{{ lead_file.stage }}</span>
-  {{ lead_file.row_count | fmt_int }} rows |
-  {{ summary.with_email | fmt_int }} with email |
-  Tier: A={{ summary.by_tier.A }} B={{ summary.by_tier.B }} C={{ summary.by_tier.C }} D={{ summary.by_tier.D }}
+<div class="mb-1">
+  <h1 class="text-2xl font-bold text-zinc-100">{{ lead_file.filename }}</h1>
+</div>
+<div class="flex items-center gap-3 mb-6 text-sm">
+  <span class="inline-flex px-2 py-0.5 rounded text-xs font-medium border stage-{{ lead_file.stage }}">{{ lead_file.stage }}</span>
+  <span class="text-zinc-500">{{ lead_file.row_count | fmt_int }} rows</span>
+  <span class="text-zinc-600">|</span>
+  <span class="text-zinc-500">{{ summary.with_email | fmt_int }} with email</span>
+  <span class="text-zinc-600">|</span>
+  <span class="text-zinc-500">Tier: A={{ summary.by_tier.A }} B={{ summary.by_tier.B }} C={{ summary.by_tier.C }} D={{ summary.by_tier.D }}</span>
 </div>
 
-<div class="card p-3 mb-3">
-  <form method="get" class="row g-2 align-items-end" id="filter-form"
+<div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 mb-5">
+  <form method="get" class="flex flex-wrap gap-3 items-end" id="filter-form"
         hx-get="/portal/leads/{{ file_id }}"
         hx-target="#lead-rows"
         hx-swap="outerHTML"
@@ -18,19 +22,22 @@
         hx-trigger="change from:select, change from:input[type=number], change from:input[type=checkbox], submit">
     <input type="hidden" name="sort_col" value="{{ sort_col }}">
     <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
-    <div class="col-md-3">
-      <input type="text" name="q" class="form-control" placeholder="Search..." value="{{ q }}">
+    <div class="flex-1 min-w-[200px]">
+      <input type="text" name="q" placeholder="Search..." value="{{ q }}"
+             class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-600">
     </div>
-    <div class="col-md-2">
-      <select name="sendability" class="form-select">
+    <div>
+      <select name="sendability"
+              class="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:border-zinc-600">
         <option value="">All sendability</option>
         <option value="verified" {% if sendability == 'verified' %}selected{% endif %}>Verified</option>
         <option value="risky" {% if sendability == 'risky' %}selected{% endif %}>Risky</option>
         <option value="bad" {% if sendability == 'bad' %}selected{% endif %}>Bad</option>
       </select>
     </div>
-    <div class="col-md-2">
-      <select name="tier" class="form-select">
+    <div>
+      <select name="tier"
+              class="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:border-zinc-600">
         <option value="">All tiers</option>
         <option value="A" {% if tier == 'A' %}selected{% endif %}>A</option>
         <option value="B" {% if tier == 'B' %}selected{% endif %}>B</option>
@@ -38,27 +45,32 @@
         <option value="D" {% if tier == 'D' %}selected{% endif %}>D</option>
       </select>
     </div>
-    <div class="col-md-2">
-      <input type="number" name="min_score" class="form-control" placeholder="Min score" value="{{ min_score or '' }}">
+    <div>
+      <input type="number" name="min_score" placeholder="Min score" value="{{ min_score or '' }}"
+             class="w-28 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-600">
     </div>
-    <div class="col-md-2">
-      <div class="form-check">
-        <input class="form-check-input" type="checkbox" name="has_email" value="1" id="has_email" {% if has_email == '1' %}checked{% endif %}>
-        <label class="form-check-label" for="has_email">Has email</label>
-      </div>
+    <div class="flex items-center gap-2">
+      <input type="checkbox" name="has_email" value="1" id="has_email" {% if has_email == '1' %}checked{% endif %}
+             class="w-4 h-4 rounded border-zinc-700 bg-zinc-950 text-amber-500 focus:ring-amber-500 focus:ring-offset-zinc-900">
+      <label for="has_email" class="text-sm text-zinc-400">Has email</label>
     </div>
-    <div class="col-md-1">
-      <button type="submit" class="btn btn-primary w-100">Filter</button>
-    </div>
+    <button type="submit" class="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-sm rounded border border-amber-500/20 transition-colors">
+      Filter
+    </button>
   </form>
 </div>
 
-<div class="d-flex justify-content-between align-items-center mb-2">
-  <div>
-    <a href="/api/v1/export/{{ file_id }}?q={{ q | urlencode }}&sendability={{ sendability }}&tier={{ tier }}&min_score={{ min_score }}&has_email={{ has_email }}&sort_col={{ sort_col }}&sort_dir={{ sort_dir }}" class="btn btn-sm btn-outline-success">Export CSV</a>
-    <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteSelected()">Delete Selected</button>
+<div class="flex items-center justify-between mb-4">
+  <div class="flex items-center gap-2">
+    <a href="/api/v1/export/{{ file_id }}?q={{ q | urlencode }}&sendability={{ sendability }}&tier={{ tier }}&min_score={{ min_score }}&has_email={{ has_email }}&sort_col={{ sort_col }}&sort_dir={{ sort_dir }}"
+       class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-sm rounded border border-amber-500/20 transition-colors">
+      Export CSV
+    </a>
+    <button type="button" onclick="deleteSelected()" class="flex items-center gap-1.5 px-3 py-1.5 bg-red-900/40 hover:bg-red-900/60 text-red-300 text-sm rounded border border-red-800/50 transition-colors">
+      Delete Selected
+    </button>
   </div>
-  <div class="text-muted">{{ total | fmt_int }} results</div>
+  <div class="text-zinc-500 text-sm">{{ total | fmt_int }} results</div>
 </div>
 
 <form id="bulk-delete-form" method="post" action="/portal/leads/{{ file_id }}/delete-rows">

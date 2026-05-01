@@ -1,32 +1,28 @@
 {% extends "base.html" %}
-{% block title %}Leads — SG Portal{% endblock %}
+{% block title %}Leads — SG Pipeline{% endblock %}
 {% block content %}
-<h2 class="mb-4">Lead Files</h2>
+<h1 class="text-2xl font-bold text-zinc-100 mb-6">Lead Files</h1>
 
-<div class="mb-3">
-  <a href="/portal/leads" class="btn btn-sm btn-outline-secondary {% if not stage_filter %}active{% endif %}">All</a>
-  <a href="/portal/leads?stage=leadgen" class="btn btn-sm btn-outline-primary {% if stage_filter == 'leadgen' %}active{% endif %}">Leadgen</a>
-  <a href="/portal/leads?stage=enriched" class="btn btn-sm btn-outline-success {% if stage_filter == 'enriched' %}active{% endif %}">Enriched</a>
-  <a href="/portal/leads?stage=verified" class="btn btn-sm btn-outline-warning {% if stage_filter == 'verified' %}active{% endif %}">Verified</a>
-  <a href="/portal/leads?stage=outreach" class="btn btn-sm btn-outline-info {% if stage_filter == 'outreach' %}active{% endif %}">Outreach</a>
+<div class="flex flex-wrap gap-2 mb-6">
+  <a href="/portal/leads" class="inline-flex px-2.5 py-1 rounded text-xs font-medium border transition-colors {% if not stage_filter %}bg-zinc-700 text-zinc-200 border-zinc-600{% else %}text-zinc-500 border-zinc-700 hover:text-zinc-300{% endif %}">All</a>
+  <a href="/portal/leads?stage=leadgen" class="inline-flex px-2.5 py-1 rounded text-xs font-medium border transition-colors {% if stage_filter == 'leadgen' %}bg-zinc-700 text-zinc-200 border-zinc-600{% else %}text-zinc-500 border-zinc-700 hover:text-zinc-300{% endif %}">Leadgen</a>
+  <a href="/portal/leads?stage=enriched" class="inline-flex px-2.5 py-1 rounded text-xs font-medium border transition-colors {% if stage_filter == 'enriched' %}bg-zinc-700 text-zinc-200 border-zinc-600{% else %}text-zinc-500 border-zinc-700 hover:text-zinc-300{% endif %}">Enriched</a>
+  <a href="/portal/leads?stage=verified" class="inline-flex px-2.5 py-1 rounded text-xs font-medium border transition-colors {% if stage_filter == 'verified' %}bg-zinc-700 text-zinc-200 border-zinc-600{% else %}text-zinc-500 border-zinc-700 hover:text-zinc-300{% endif %}">Verified</a>
+  <a href="/portal/leads?stage=outreach" class="inline-flex px-2.5 py-1 rounded text-xs font-medium border transition-colors {% if stage_filter == 'outreach' %}bg-zinc-700 text-zinc-200 border-zinc-600{% else %}text-zinc-500 border-zinc-700 hover:text-zinc-300{% endif %}">Outreach</a>
 </div>
 
-<div class="row g-3">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
   {% for f in files %}
-  <div class="col-md-4">
-    <a href="/portal/leads/{{ f.path | file_id }}" class="text-decoration-none">
-      <div class="card kpi-card h-100 p-3">
-        <div class="d-flex justify-content-between align-items-start">
-          <span class="badge stage-badge-{{ f.stage }}">{{ f.stage }}</span>
-          <small class="text-muted">{{ f.row_count | fmt_int }} rows</small>
-        </div>
-        <div class="mt-2 fw-semibold text-dark">{{ f.filename }}</div>
-        <small class="text-muted">{{ f.mtime.isoformat()[:19] }}</small>
-      </div>
-    </a>
-  </div>
+  <a href="/portal/leads/{{ f.path | file_id }}" class="block bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-700 transition-colors group">
+    <div class="flex items-center justify-between mb-3">
+      <span class="inline-flex px-2 py-0.5 rounded text-xs font-medium border stage-{{ f.stage }}">{{ f.stage }}</span>
+      <span class="text-zinc-500 text-xs">{{ f.row_count | fmt_int }} rows</span>
+    </div>
+    <div class="text-zinc-100 font-medium text-sm mb-1 group-hover:text-amber-400 transition-colors truncate">{{ f.filename }}</div>
+    <div class="text-zinc-600 text-xs">{{ f.mtime.isoformat()[:19] }}</div>
+  </a>
   {% else %}
-  <div class="col-12 text-muted">No lead files found.</div>
+  <div class="col-span-full text-zinc-500 text-center py-12">No lead files found.</div>
   {% endfor %}
 </div>
 {% endblock %}

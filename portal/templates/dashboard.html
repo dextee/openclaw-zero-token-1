@@ -1,52 +1,56 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — SG Portal{% endblock %}
+{% block title %}Dashboard — SG Pipeline{% endblock %}
 {% block content %}
-<h2 class="mb-4">Dashboard</h2>
+<h1 class="text-2xl font-bold text-zinc-100 mb-6">Dashboard</h1>
 
-<div class="row g-3 mb-4">
-  <div class="col-md-3">
-    <div class="card kpi-card p-3">
-      <div class="text-muted small">Total Leads</div>
-      <div class="fs-2 fw-bold">{{ data.total_leads | fmt_int }}</div>
-    </div>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+  <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+    <div class="text-zinc-500 text-sm mb-1">Total Leads</div>
+    <div class="text-3xl font-bold text-zinc-100">{{ data.total_leads | fmt_int }}</div>
   </div>
-  <div class="col-md-3">
-    <div class="card kpi-card p-3">
-      <div class="text-muted small">Total Files</div>
-      <div class="fs-2 fw-bold">{{ data.total_files | fmt_int }}</div>
-    </div>
+  <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+    <div class="text-zinc-500 text-sm mb-1">Total Files</div>
+    <div class="text-3xl font-bold text-zinc-100">{{ data.total_files | fmt_int }}</div>
   </div>
-  <div class="col-md-3">
-    <div class="card kpi-card p-3">
-      <div class="text-muted small">Pipeline Health</div>
-      <div class="fs-2 fw-bold health-{{ data.health.color }}">{{ data.health.status | title }}</div>
-      <div class="small text-muted">{{ data.health.message }}</div>
+  <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+    <div class="text-zinc-500 text-sm mb-1">Pipeline Health</div>
+    <div class="text-3xl font-bold
+      {% if data.health.color == 'green' %}text-emerald-400{% elif data.health.color == 'yellow' %}text-amber-400{% else %}text-red-400{% endif %}">
+      {{ data.health.status | title }}
     </div>
+    <div class="text-zinc-500 text-xs mt-1">{{ data.health.message }}</div>
   </div>
-  <div class="col-md-3">
-    <div class="card kpi-card p-3">
-      <div class="text-muted small">Stages</div>
+  <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+    <div class="text-zinc-500 text-sm mb-1">Stages</div>
+    <div class="flex flex-wrap gap-1.5 mt-1">
       {% for stage, count in data.by_stage.items() %}
-        <span class="badge stage-badge-{{ stage }} me-1">{{ stage }}: {{ count | fmt_int }}</span>
+        <span class="inline-flex px-2 py-0.5 rounded text-xs font-medium border stage-{{ stage }}">{{ stage }}: {{ count | fmt_int }}</span>
       {% endfor %}
     </div>
   </div>
 </div>
 
-<h4 class="mb-3">Recent Uploads</h4>
-<div class="table-responsive">
-  <table class="table table-sm table-hover bg-white rounded shadow-sm">
-    <thead><tr><th>Filename</th><th>Stage</th><th>Rows</th><th>Date</th></tr></thead>
-    <tbody>
-      {% for u in data.recent_uploads %}
+<h2 class="text-lg font-semibold text-zinc-100 mb-4">Recent Uploads</h2>
+<div class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+  <table class="w-full text-sm text-left">
+    <thead class="bg-zinc-800/60 border-b border-zinc-800">
       <tr>
-        <td>{{ u.filename }}</td>
-        <td><span class="badge stage-badge-{{ u.stage }}">{{ u.stage }}</span></td>
-        <td>{{ u.rows | fmt_int }}</td>
-        <td class="text-muted">{{ u.mtime[:19] }}</td>
+        <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Filename</th>
+        <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Stage</th>
+        <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Rows</th>
+        <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Date</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-zinc-800/40">
+      {% for u in data.recent_uploads %}
+      <tr class="hover:bg-zinc-800/30 transition-colors">
+        <td class="px-5 py-3.5 text-zinc-300">{{ u.filename }}</td>
+        <td class="px-5 py-3.5"><span class="inline-flex px-2 py-0.5 rounded text-xs font-medium border stage-{{ u.stage }}">{{ u.stage }}</span></td>
+        <td class="px-5 py-3.5 text-zinc-400">{{ u.rows | fmt_int }}</td>
+        <td class="px-5 py-3.5 text-zinc-500 text-xs">{{ u.mtime[:19] }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="4" class="text-muted">No recent uploads</td></tr>
+      <tr><td colspan="4" class="px-5 py-8 text-zinc-500 text-center">No recent uploads</td></tr>
       {% endfor %}
     </tbody>
   </table>
