@@ -1019,10 +1019,21 @@ def pick_best_dm(dms):
 
 
 # ── Existing functions ───────────────────────────────────────────────────────
+# ── Retail / irrelevant target exclusions ───────────────────────────────────
+# These are never B2B financing prospects (consumer-facing retail properties)
+RETAIL_KEYWORDS = (
+    "shopping center", "shopping centre", "shopping mall", "mall",
+    "plaza", "hypermarket", "supermarket", "department store",
+)
+
+
 def is_likely_sg_company(name, url):
     """Heuristic to keep Singapore-based companies. Applied to both direct results and listicles."""
     domain = normalize_domain(url)
     nlower = name.lower()
+    # Exclude retail properties — never B2B financing targets
+    if any(rk in nlower for rk in RETAIL_KEYWORDS):
+        return False
     # Always allow .sg domains
     if domain.endswith(".sg") or domain.endswith(".com.sg"):
         return True
