@@ -116,39 +116,37 @@ _TITLE_WORDS_RE = re.compile(
 # generic business word nor an industry-specific descriptor. Names with a
 # corporate suffix (Pte, Ltd, LLP, …) always pass — they're legally registered.
 GENERIC_WORDS = {
+    # Purely generic business descriptors (never brand tokens)
     "service", "services", "solution", "solutions", "company", "companies",
     "firm", "firms", "group", "agency", "agencies", "consulting", "consultancy",
     "professional", "specialist", "specialists", "expert", "experts",
     "provider", "providers", "contractor", "contractors", "contracting",
-    "work", "works", "project", "projects", "management", "building", "builder",
-    "builders", "maintenance", "operation", "operations", "integrated",
+    "work", "works", "project", "projects", "management",
+    "maintenance", "operation", "operations", "integrated",
     "advanced", "total", "global", "enterprise", "one", "stop",
-    "digital", "marketing", "support", "it", "ict", "engineering", "logistics",
-    "technology", "technologies", "system", "systems", "media", "development",
+    "digital", "marketing", "support", "it", "ict",
+    "system", "systems", "media", "development",
     "security", "data", "network", "communication", "communications",
     "finance", "financial", "accounting", "legal", "recruitment", "staffing",
-    "trading", "supply", "chain", "property", "real", "estate", "facilities",
-    "food", "catering", "retail", "wholesale", "import", "export",
-    "singapore", "sg", "asia", "the", "a", "an", "and", "or", "for", "of",
-    "in", "at", "to", "by", "&", "our", "your", "us", "we", "you",
+    "supply", "chain", "property", "real", "estate", "facilities",
+    "wholesale", "import", "export",
+    # Location words
+    "singapore", "sg", "asia",
+    # Articles, prepositions, pronouns
+    "the", "a", "an", "and", "or", "for", "of", "in", "at", "to", "by", "&",
+    "our", "your", "us", "we", "you", "with", "new",
+    # Superlatives and promotional words
     "best", "top", "premier", "premium", "leading", "award", "winning",
     "trusted", "welcome", "home", "about", "contact", "get", "touch",
     "make", "dream", "reality", "turn", "explore", "discover", "experience",
-    "become", "with", "new", "good", "great",
+    "become", "good", "great",
+    # General descriptors
     "general", "commercial", "residential", "industrial", "corporate",
     "local", "national", "international", "certified", "licensed", "accredited",
-    "manufacturing", "manufacturer", "distributor", "distribution", "supplier",
-    "outsourcing", "operator", "forwarding", "forwarder", "installer",
-    "restaurant", "hotel", "clinic", "hospital", "school",
-    "fit", "out",
-    # Construction/renovation/design descriptors (common in listicle junk names)
-    "construction", "renovation", "interior", "design", "build", "builds", "built",
-    # Property types — not brand tokens
-    "condominium", "condo", "hdb", "shophouse", "apartment", "office", "landed",
     # Service delivery descriptors
     "packages", "package", "plan", "plans", "scheme", "rates", "pricing",
-    # Tech/electronics generic descriptors
-    "electronics", "semiconductor", "components", "parts", "devices",
+    # Property types — not brand tokens
+    "condominium", "condo", "hdb", "shophouse", "apartment", "office", "landed",
 }
 _CORP_SUFFIX_RE = re.compile(
     r'\b(pte|ltd|llp|llc|corp|inc|pl|co\.?|group|holdings)\b', re.I
@@ -179,12 +177,12 @@ def has_brand_token(name, industry_terms=()):
 LOW_QUALITY_TITLE_PATTERNS = [
     r"^top\s+\d+", r"^best\s+\d+", r"^\d+\s+best", r"^\d+\s+top",
     r"ranking\b", r"ranked\b", r"company\s+ranking",
-    r"list\s+of", r"companies\s+in", r"companies\s+to",
+    r"list\s+of",
     r"fintech\s+companies", r"startup\s+companies",
-    r"guide\s+to", r"complete\s+guide", r"your\s+complete\s+guide",
+    r"complete\s+guide", r"your\s+complete\s+guide",
     r"festival\s+\d", r"festival\s+202", r"association\b", r"directory\b",
     r"what\s+is\s+", r"how\s+to\s+", r"home\s*$", r"blog\b", r"news\b",
-    r"article\b", r"innovation\s+in", r"sustaining\s+growth",
+    r"article\b", r"sustaining\s+growth",
     r"visit\s+singapore", r"mice\b", r"event\s+listing",
     r" government's ", r"government\b", r"mas\.gov\.sg",
     r"builtinsingapore\.com", r"techinasia\.com",
@@ -204,6 +202,8 @@ LOW_QUALITY_TITLE_PATTERNS = [
 LOW_QUALITY_DOMAIN_PATTERNS = [
     r"visitsingapore\.com", r"builtin\.com", r"builtinsingapore\.com",
     r"lusha\.com", r"apollo\.io", r"zoominfo\.com", r"crunchbase\.com", r"ensun\.io",
+    r"getprospect\.com", r"getprospect\.io", r"contactout\.com", r"rocketreach\.co",
+    r"hunter\.io", r"skrapp\.io", r"snov\.io", r"uplead\.com",
     r"big-picture\.com", r"techinasia\.com", r"fintechnews\.sg",
     r"mas\.gov\.sg", r"pwc\.com", r"mckinsey\.com", r"deloitte\.com",
     r"sgpbusiness\.com", r"emis\.com", r"tracxn\.com", r"bouncewatch\.com",
@@ -641,10 +641,8 @@ def _mojeek_search(query, limit=10):
 # 3-min-recovery (mojeek/yahoo), then Bing-backed diversity (aol/ask), then
 # independent-infrastructure fallback (seznam/yacy).
 SEARXNG_ENGINES = [
-    "google", "startpage", "bing", "ecosia",    # tier 1: highest yield
-    "yandex", "mojeek", "yahoo",                # tier 2: solid backup
-    "aol", "ask",                               # tier 3: Bing-backed rank diversity
-    "seznam", "yacy",                           # tier 4: independent-infra fallback
+    "google", "startpage", "bing", "duckduckgo",  # tier 1: highest yield
+    "yandex", "mojeek", "yahoo", "brave",          # tier 2: solid backup
 ]
 SEARXNG_HEALTHY_ENGINES = set()  # populated at runtime by check_searxng_health()
 
@@ -1418,8 +1416,9 @@ def results_to_leads(search_data, industry, industry_terms=()):
                 continue
             if re.match(r'^\d+\s', name):
                 continue
-            # Reject names containing a 4-digit year (article/report titles)
-            if re.search(r'\b20\d{2}\b', name):
+            # Reject names STARTING with a 4-digit year (article/report titles)
+            # Keep names like "ABC Construction — Established 2015" (year is not the title)
+            if re.match(r'^20\d{2}\b', name):
                 continue
             # Navigation page titles and social actions (never a company name)
             nav_titles = ("About Us", "Contact Us", "Our Services", "Our Warehousing",
@@ -1429,12 +1428,8 @@ def results_to_leads(search_data, industry, industry_terms=()):
                           "Tweet", "Share", "Follow", "Like", "Subscribe",
                           "Login", "Sign In", "Sign Up", "Register",
                           "Sign in", "Cookies Policy", "Partnerships & sponsoring",
-                          "Get In Touch", "Welcome", "Interior Fit Out", "Interior Designer",
-                          "Office Interior", "Design & Build", "Renovation Works",
-                          "Fit Out Works", "Construction Works", "Interior Design",
+                          "Get In Touch", "Welcome",
                           "Make Your Dream", "Our Portfolio", "View Projects",
-                          "Interior Design & Renovation", "Interior Fit Up Work",
-                          "Interior Fit Out Services",
                           "Contact Page", "Contact", "Page Not Found", "404", "Error")
             _name_lc = name.lower()
             if _name_lc in {n.lower() for n in nav_titles} or any(_name_lc.startswith(n.lower()) for n in nav_titles):
@@ -1448,17 +1443,26 @@ def results_to_leads(search_data, industry, industry_terms=()):
             )
             if any(p in name for p in generic_phrases) and len(name) > 35:
                 continue
-            # SEO keyword phrases ending in "Singapore" or "SG" without a company identifier
-            # e.g. "IT Support Services Singapore", "IT Solutions in Singapore", "IT Support SG"
-            if (re.search(r'\b(singapore|sg)\s*$', name, re.I)
-                    and not re.search(r'\b(pte|ltd|corp|inc|co\.|llp|llc)\b', name, re.I)
-                    and len(name.split()) >= 3):
-                continue
-            # SEO keyword phrases starting with "Singapore" + generic words (no company identifier)
-            # e.g. "Singapore SME IT Support", "Singapore Construction Services"
-            if (re.match(r'^singapore\s+', name, re.I)
-                    and not re.search(r'\b(pte|ltd|corp|inc|co\.|llp|llc)\b', name, re.I)
-                    and len(name.split()) >= 3):
+            # SEO keyword phrase detection — only drop if ENTIRE name is generic + location
+            # e.g. "IT Support Services Singapore" (all generic words + location)
+            # Real companies like "ABC Construction Singapore" are kept (ABC is a brand)
+            seo_only_words = {"it", "support", "services", "service", "solutions", "solution",
+                              "company", "companies", "firm", "firms", "consulting", "consultancy",
+                              "agency", "agencies", "professional", "specialist", "expert",
+                              "provider", "providers", "contractor", "contractors",
+                              "management", "marketing", "digital", "technology", "technologies",
+                              "construction", "renovation", "interior", "design", "build",
+                              "engineering", "logistics", "accounting", "legal", "financial",
+                              "insurance", "broker", "brokerage", "hr", "recruitment", "staffing",
+                              "real", "estate", "property", "facilities", "supplier", "distributor",
+                              "manufacturer", "manufacturing", "trading", "import", "export",
+                              "wholesale", "retail", "food", "beverage", "restaurant", "catering",
+                              "hotel", "clinic", "hospital", "school", "education",
+                              "singapore", "sg"}
+            stripped_name = re.sub(r'[^a-zA-Z0-9\s]', '', name.lower())
+            name_words = [w for w in stripped_name.split() if len(w) >= 2]
+            # Only reject if EVERY word is in the SEO-only set AND name is 3+ words
+            if len(name_words) >= 3 and all(w in seo_only_words for w in name_words):
                 continue
             # Brand-token rule: 3+ word names must contain at least one non-generic,
             # non-industry word. Handles all industries via industry_terms from expand_industry().
@@ -1474,7 +1478,7 @@ def results_to_leads(search_data, industry, industry_terms=()):
             # Reject URLs that are clearly subpages of large corporate sites
             # e.g. sembcorp.com/sg/our-solutions-in-... (not a separate company)
             path_segments = [s for s in url.split('?')[0].split('/') if s and not s.startswith('http')]
-            if len(path_segments) > 2 and not url.rstrip('/').endswith('.sg') and not url.rstrip('/').endswith('.com.sg'):
+            if len(path_segments) > 3 and not url.rstrip('/').endswith('.sg') and not url.rstrip('/').endswith('.com.sg'):
                 # Deep path on non-SG domain = likely a subpage, not a company homepage
                 # But allow if the title contains a clear company identifier
                 if not re.search(r'(Pte Ltd|Pte\. Ltd\.|Ltd\.|Limited|LLP|Corp|Inc)', name):
@@ -1583,6 +1587,8 @@ def main():
                         help="Final QC pass: send names to DeepSeek v4, drop page-title/tagline/non-SG junk.")
     parser.add_argument("--qc-model", default="deepseek-web/deepseek-v4",
                         help="Model to use for QC (default deepseek-web/deepseek-v4)")
+    parser.add_argument("--min-confidence", choices=["low", "medium", "high"], default=None,
+                        help="Filter out leads below this industry confidence level (low/medium/high)")
     args = parser.parse_args()
     if args.max_leads is None:
         args.max_leads = args.target
@@ -1644,12 +1650,12 @@ def main():
     # This diversifies results further across repeated runs of the same industry.
     # Engine preference lists — each includes full fallback cascade so if tier-1 engines
     # are rate-limited, tiers 2-4 keep the query alive. Order tuned for SG B2B yield.
-    e_primary = ["google", "startpage", "bing", "ecosia", "yandex", "mojeek", "yahoo", "aol", "ask", "seznam", "yacy"]
-    e_alt     = ["ecosia", "startpage", "google", "bing", "mojeek", "yandex", "yahoo", "ask", "aol", "seznam", "yacy"]
-    e_site    = ["bing", "google", "ecosia", "yandex", "startpage", "mojeek", "yahoo", "aol", "ask", "seznam", "yacy"]  # site: ops work best on bing/google
+    e_primary = ["google", "startpage", "bing", "duckduckgo", "yandex", "mojeek", "yahoo", "brave"]
+    e_alt     = ["startpage", "google", "bing", "duckduckgo", "mojeek", "yandex", "yahoo", "brave"]
+    e_site    = ["bing", "google", "duckduckgo", "yandex", "startpage", "mojeek", "yahoo", "brave"]  # site: ops work best on bing/google
     rotate = run_count % 2
     e_main = e_alt if rotate else e_primary
-    e_list = ["ecosia", "startpage", "google", "mojeek", "bing", "yahoo", "ask", "aol"]  # listicles — high-yield engines
+    e_list = ["startpage", "google", "mojeek", "bing", "yahoo", "brave"]  # listicles — high-yield engines
 
     queries = [
         # ── Tier 1: Direct company homepage hits (highest precision) ──────────
@@ -1687,11 +1693,11 @@ def main():
 
     search_data = []
     query_metrics = []
-    failed_engines = set()  # engines that returned 0 results — skip for rest of run
+    failed_engines = {}  # engine -> consecutive failure count (don't permanently blacklist)
 
     for i, (q, preferred) in enumerate(queries, 1):
-        # Skip already-failed engines from preferred list
-        viable = [e for e in preferred if e not in failed_engines]
+        # Skip engines with 3+ consecutive failures (don't permanently blacklist after 1)
+        viable = [e for e in preferred if failed_engines.get(e, 0) < 3]
         if not viable:
             viable = preferred  # if all preferred failed, try anyway as last resort
 
@@ -1711,9 +1717,11 @@ def main():
             "time_ms": round(elapsed * 1000),
         })
 
-        # Track engine failures for smart skipping
+        # Track engine failures for smart skipping (reset on success)
         if raw_count == 0 and engine_used in viable:
-            failed_engines.add(engine_used)
+            failed_engines[engine_used] = failed_engines.get(engine_used, 0) + 1
+        elif raw_count > 0 and engine_used in failed_engines:
+            failed_engines[engine_used] = 0
 
         if raw_count > 0:
             print_progress("1/5", f"Query {i}/{len(queries)}: {raw_count} results via {engine_used} ({elapsed:.1f}s)")
@@ -1808,6 +1816,25 @@ def main():
     print_progress("5/5", f"Writing final CSV to {args.output}")
     import shutil
     shutil.copy(dedup_csv, args.output)
+
+    if args.min_confidence:
+        CONF_RANK = {"low": 0, "medium": 1, "high": 2}
+        min_rank = CONF_RANK[args.min_confidence]
+        import csv as _csv_mod
+        with open(args.output, "r", encoding="utf-8-sig") as f:
+            _reader = _csv_mod.DictReader(f)
+            _fieldnames = _reader.fieldnames or []
+            rows = list(_reader)
+        before = len(rows)
+        rows = [r for r in rows if CONF_RANK.get((r.get("industry_confidence") or "low").lower(), 0) >= min_rank]
+        dropped = before - len(rows)
+        if dropped:
+            print(f"PROGRESS: Confidence filter ({args.min_confidence}+): dropped {dropped} low-confidence leads")
+        with open(args.output, "w", encoding="utf-8-sig", newline="") as f:
+            _writer = _csv_mod.DictWriter(f, fieldnames=_fieldnames)
+            _writer.writeheader()
+            _writer.writerows(rows)
+        row_count = len(rows)
 
     # Optional Stage 6: LLM-based QC pass (drops page-title / tagline / non-SG junk)
     if args.qc:
