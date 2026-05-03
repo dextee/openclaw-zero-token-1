@@ -151,7 +151,7 @@ def _stage_from_path(path: Path) -> str:
 
 def _compute_row_hash(row: dict) -> str:
     """Compute a stable hash for a row."""
-    vals = "|".join(str(v) for v in row.values())
+    vals = "|".join(str(v) for k, v in row.items() if k != "_row_hash")
     return hashlib.sha256(vals.encode()).hexdigest()[:16]
 
 
