@@ -229,6 +229,8 @@ def main():
                         help="Campaign name for history tracking")
     parser.add_argument("--single", action="store_true",
                         help="Generate only email #1 (one-off send, no follow-ups)")
+    parser.add_argument("--allow-personal", action="store_true",
+                        help="Allow personal email domains (gmail, yahoo, etc.) — off by default")
     parser.add_argument("--filter-bouncers", dest="filter_bouncers", action="store_true",
                         default=True, help="Skip rows whose email_verified flag indicates a likely bounce (default: on)")
     parser.add_argument("--no-filter-bouncers", dest="filter_bouncers", action="store_false",
@@ -296,6 +298,25 @@ def main():
     elif args.filter_bouncers:
         print(f"{Fore.YELLOW}⚠️  --filter-bouncers requested but source CSV has no 'email_verified' column. "
               f"Run sg-verify first to filter bouncers.{Style.RESET_ALL}")
+
+    # ── Personal domain filter (default ON) ────────────────────────────────
+    PERSONAL_DOMAINS = {
+        "gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "live.com",
+        "icloud.com", "me.com", "mac.com", "aol.com", "protonmail.com",
+        "zoho.com", "mail.com", "ymail.com", "msn.com", "googlemail.com",
+        "yahoo.co.uk", "yahoo.com.sg", "hotmail.co.uk", "hotmail.com.sg",
+        "qq.com", "163.com", "126.com", "sina.com",
+    }
+    if not args.allow_personal:
+        before = len(rows)
+        rows = [
+            r for r in rows
+            if (r.get("email") or "").strip().lower().split("@")[-1] not in PERSONAL_DOMAINS
+        ]
+        dropped = before - len(rows)
+        if dropped:
+            print(f"{Fore.CYAN}📧 Personal domain filter: removed {dropped} personal email leads "
+                  f"(pass --allow-personal to include){Style.RESET_ALL}")
 
     # ── Deduplicate by to_email, keeping highest-quality row ────────────────
     if args.dedupe_by_email and rows:

@@ -51,13 +51,28 @@ cp "$SEQ_CSV" "$BACKUP_DIR/sequences.csv"
 
 export TELEGRAM_CHAT_ID="$USER_ID"
 
+# Read notify_chat_ids from campaign JSON; fall back to hardcoded team list
+NOTIFY_IDS=$(python3 -c "
+import json
+c = json.load(open('$CAMPAIGN'))
+ids = c.get('notify_chat_ids', ['280451401', '498391262', '5996214874', '8667886270'])
+print(' '.join(str(i) for i in ids))
+" 2>/dev/null || echo "280451401 498391262 5996214874 8667886270")
+
+notify_all() {
+  local msg="$1"
+  for notify_id in $NOTIFY_IDS; do
+    TELEGRAM_CHAT_ID="$notify_id" notify_telegram "$msg"
+  done
+}
+
 # Idempotency check via sender's state file
 STATE_FILE="$USER_DIR/.outreach_state.json"
 if [[ -f "$STATE_FILE" ]]; then
   LAST_DATE=$(python3 -c "import json; print(json.load(open('$STATE_FILE')).get('last_send_date',''))" 2>/dev/null || true)
   SENT_TODAY=$(python3 -c "import json; print(json.load(open('$STATE_FILE')).get('sent_today',0))" 2>/dev/null || true)
   if [[ "$LAST_DATE" == "$(TZ=Asia/Singapore date +%Y-%m-%d)" && "${SENT_TODAY:-0}" -gt 0 && "$TRIGGER" != "retry" ]]; then
-    notify_telegram "✅ Already sent $SENT_TODAY emails today. Skipping to avoid duplicates."
+    notify_all "✅ Already sent $SENT_TODAY emails today. Skipping to avoid duplicates."
     exit 0
   fi
 fi
@@ -82,7 +97,7 @@ pending = [r for r in rows if r.get('status') in ('', 'pending')]
 print(len(pending))
 " 2>/dev/null || echo 0)
   if [[ "$FAIL_COUNT" -ge 3 && "$PENDING" -gt 0 ]]; then
-    notify_telegram "🚨 Sanity cap triggered: $FAIL_COUNT consecutive failures with $PENDING pending. Pausing outreach. Reply 'resume outreach' when fixed."
+    notify_all "🚨 Sanity cap triggered: $FAIL_COUNT consecutive failures with $PENDING pending. Pausing outreach. Reply 'resume outreach' when fixed."
     touch "$USER_DIR/paused.flag"
     # Comment out crontab line
     python3 /root/openclaw-zero-token/skills/sg-outreach/scripts/outreach_control.py --pause --user-id "$USER_ID" --confirm
@@ -90,7 +105,7 @@ print(len(pending))
   fi
 fi
 
-notify_telegram "📬 Daily outreach started — *$NUM_SENDERS senders*, up to *$LIMIT emails total* today."
+notify_all "📬 Daily outreach started — *$NUM_SENDERS senders*, up to *$LIMIT emails total* today."
 
 START=$(date +%s)
 ACCUM_LOG="$USER_DIR/last_run.log"
@@ -112,7 +127,7 @@ for i in $(seq 0 $((NUM_SENDERS-1))); do
   CONFIG_ARG=""
   [[ -n "$SENDER_CFG" && -f "$SENDER_CFG" ]] && CONFIG_ARG="--config-file $SENDER_CFG"
 
-  notify_telegram "📨 Sending up to *$SENDER_LIMIT* from \`$SENDER_EMAIL\`..."
+  notify_all "📨 Sending up to *$SENDER_LIMIT* from \`$SENDER_EMAIL\`..."
 
   SENDER_LOG="$USER_DIR/last_run_${i}.log"
   set +o pipefail
@@ -178,7 +193,7 @@ print(d.strftime('%a %d %b, 8am SGT'))
     --sent today --user-id "$USER_ID" --notify-chat-id "$USER_ID" || true
 
   # Step 2: professional success message + per-sender breakdown + command hints
-  notify_telegram "✅ *Daily outreach delivered!*
+  notify_all "✅ *Daily outreach delivered!*
 
 📬 *$ACTUAL_SENT emails sent today* across $NUM_SENDERS sender(s)
 $PER_SENDER_RESULTS
@@ -192,7 +207,7 @@ You can reply:
 
 Type *menu* for the full command list."
 else
-  notify_telegram "⚠️ *Outreach failed* (rc=$RC).
+  notify_all "⚠️ *Outreach failed* (rc=$RC).
 Reply *show failures* to see the reasons or *retry today* to retry.
 Type *menu* for the full command list."
 fi
@@ -200,6 +215,22 @@ fi
 # Bounce auto-suppression
 python3 /root/openclaw-zero-token/skills/sg-outreach/scripts/suppress_bounces.py \
   --log "$USER_DIR/last_run.log" --user-id "$USER_ID" || true
+
+# IMAP reply tracking — check each sender account that has credentials configured
+for i in $(seq 0 $((NUM_SENDERS-1))); do
+  SENDER_EMAIL=$(python3 -c "import json; s=json.loads('$SENDERS_JSON')[$i]; print(s.get('email',''))" 2>/dev/null || true)
+  [[ -z "$SENDER_EMAIL" ]] && continue
+  HAS_IMAP=$(python3 -c "
+import sys; sys.path.insert(0, '/root/openclaw-zero-token/skills/sg-outreach/scripts')
+import imap_auth
+a = imap_auth.get_account('$SENDER_EMAIL')
+print('yes' if a else 'no')
+" 2>/dev/null || echo "no")
+  if [[ "$HAS_IMAP" == "yes" ]]; then
+    python3 /root/openclaw-zero-token/skills/sg-outreach/scripts/workspace_imap_tracker.py \
+      --sequences "$SEQ_CSV" --account-email "$SENDER_EMAIL" 2>>"$USER_DIR/imap_tracker.log" || true
+  fi
+done
 
 # Backup retention (30 days)
 find "$USER_DIR/backups" -maxdepth 1 -type d -mtime +30 -exec rm -rf {} + 2>/dev/null || true

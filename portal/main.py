@@ -1,6 +1,7 @@
 from pathlib import Path
 import asyncio, csv, hashlib, io, json, os, re, subprocess, sys
 from datetime import datetime, timezone
+from urllib.parse import quote_plus
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
@@ -10,6 +11,11 @@ from auth import get_csrf_token, require_auth, verify_csrf_token
 
 PORTAL_DIR = Path(__file__).parent
 TEMPLATES_DIR = PORTAL_DIR / "templates"
+
+# Load outreach modules once at startup — avoids per-request sys.path growth
+sys.path.insert(0, str(Path("/root/openclaw-zero-token/skills/sg-outreach/scripts")))
+import imap_auth
+from deliverability_check import check_domain as _check_domain
 
 app = FastAPI(title="SG Pipeline Portal", docs_url=None, redoc_url=None)
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -24,6 +30,8 @@ templates.env.filters["tojson"] = lambda v, indent=None: json.dumps(v, indent=in
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_UPLOAD_ROWS = 100_000
 SKILL_BASE = Path("/root/openclaw-zero-token/skills")
+LEADS_OUTPUT = Path("/root/.openclaw/workspace/leads")
+OUTREACH_SCRIPTS = Path("/root/openclaw-zero-token/skills/sg-outreach/scripts")
 
 
 def _file_id(path: Path) -> str:
@@ -57,9 +65,11 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
+    import logging
+    logging.exception("Unhandled portal exception")
     return templates.TemplateResponse(
         "500.html",
-        {"request": request, "detail": str(exc)},
+        {"request": request, "detail": "An internal error occurred."},
         status_code=500,
     )
 
@@ -223,14 +233,13 @@ async def upload_post(
     filename = f"{timestamp}_{safe_name}"
 
     # Save to correct directory
-    stage_map = {"leadgen": "sg-leadgen", "enriched": "sg-enrich", "verified": "sg-verify"}
-    dest_dir = SKILL_BASE / stage_map[stage] / "leads"
+    dest_dir = LEADS_OUTPUT
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest_path = dest_dir / filename
 
     # Path jail
     resolved = dest_path.resolve()
-    if not str(resolved).startswith(str(SKILL_BASE.resolve())):
+    if not str(resolved).startswith(str(LEADS_OUTPUT.resolve())):
         raise HTTPException(status_code=400, detail="Invalid path")
 
     with open(dest_path, "wb") as f:
@@ -265,12 +274,8 @@ async def delete_file(
 
 
 @app.get("/portal/campaigns", response_class=HTMLResponse)
-async def campaigns_list(request: Request, _: str = Depends(require_auth)):
-    campaigns = reader.list_campaigns()
-    return templates.TemplateResponse("campaigns.html", {
-        "request": request,
-        "campaigns": campaigns,
-    })
+async def campaigns_list(_: str = Depends(require_auth)):
+    return RedirectResponse("/portal/outreach", status_code=302)
 
 
 @app.get("/portal/campaigns/{file_id}", response_class=HTMLResponse)
@@ -320,6 +325,267 @@ async def campaign_approve(
     return RedirectResponse(f"/portal/campaigns/{file_id}", status_code=303)
 
 
+@app.get("/portal/outreach", response_class=HTMLResponse)
+async def outreach_dashboard(request: Request, _: str = Depends(require_auth)):
+    campaigns = reader.get_active_campaigns()
+    runs_log = ""
+    if campaigns:
+        log_path = Path("/root/.openclaw/workspace/outreach") / f"user_{campaigns[0].user_id}" / "runs.log"
+        if log_path.exists():
+            try:
+                lines = log_path.read_text(encoding="utf-8").strip().splitlines()
+                runs_log = "\n".join(reversed(lines[-14:]))
+            except Exception:
+                pass
+    return templates.TemplateResponse("outreach.html", {
+        "request": request,
+        "campaigns": campaigns,
+        "runs_log": runs_log,
+    })
+
+
+@app.post("/portal/outreach/{user_id}/pause")
+async def outreach_pause(
+    user_id: str,
+    request: Request,
+    csrf: str = Form(""),
+    _: str = Depends(require_auth),
+):
+    if not verify_csrf_token(csrf):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+    subprocess.run(
+        ["python3", str(SKILL_BASE / "sg-outreach/scripts/outreach_control.py"),
+         "--pause", "--user-id", user_id, "--confirm"],
+        capture_output=True, text=True, timeout=15
+    )
+    return RedirectResponse("/portal/outreach?msg=paused", status_code=303)
+
+
+@app.post("/portal/outreach/{user_id}/resume")
+async def outreach_resume(
+    user_id: str,
+    request: Request,
+    csrf: str = Form(""),
+    _: str = Depends(require_auth),
+):
+    if not verify_csrf_token(csrf):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+    subprocess.run(
+        ["python3", str(SKILL_BASE / "sg-outreach/scripts/outreach_control.py"),
+         "--resume", "--user-id", user_id, "--confirm"],
+        capture_output=True, text=True, timeout=15
+    )
+    return RedirectResponse("/portal/outreach?msg=resumed", status_code=303)
+
+
+@app.post("/portal/outreach/{user_id}/send-now")
+async def outreach_send_now(
+    user_id: str,
+    request: Request,
+    csrf: str = Form(""),
+    _: str = Depends(require_auth),
+):
+    if not verify_csrf_token(csrf):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+    subprocess.Popen(
+        ["bash", str(SKILL_BASE / "sg-outreach/scripts/daily_outreach.sh"),
+         "--user-id", user_id, "--trigger", "manual"],
+        env={**os.environ, "TELEGRAM_CHAT_ID": user_id},
+    )
+    return RedirectResponse("/portal/outreach?msg=send-now", status_code=303)
+
+
+@app.post("/portal/outreach/{user_id}/skip-today")
+async def outreach_skip_today(
+    user_id: str,
+    request: Request,
+    csrf: str = Form(""),
+    _: str = Depends(require_auth),
+):
+    if not verify_csrf_token(csrf):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+    subprocess.run(
+        ["python3", str(OUTREACH_SCRIPTS / "outreach_control.py"),
+         "--skip-today", "--user-id", user_id, "--confirm"],
+        capture_output=True, text=True, timeout=15
+    )
+    return RedirectResponse("/portal/outreach?msg=skip-today", status_code=303)
+
+
+@app.post("/portal/outreach/{user_id}/retry-today")
+async def outreach_retry_today(
+    user_id: str,
+    request: Request,
+    csrf: str = Form(""),
+    _: str = Depends(require_auth),
+):
+    if not verify_csrf_token(csrf):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+    subprocess.Popen(
+        ["bash", str(OUTREACH_SCRIPTS / "daily_outreach.sh"),
+         "--user-id", user_id, "--trigger", "retry"],
+        env={**os.environ, "TELEGRAM_CHAT_ID": user_id},
+    )
+    return RedirectResponse("/portal/outreach?msg=retry-today", status_code=303)
+
+
+@app.get("/portal/replies", response_class=HTMLResponse)
+async def replies_page(
+    request: Request,
+    sentiment: str = "",
+    _: str = Depends(require_auth),
+):
+    rows = reader.get_reply_rows(sentiment_filter=sentiment)
+    return templates.TemplateResponse("replies.html", {
+        "request": request,
+        "rows": rows,
+        "sentiment_filter": sentiment,
+    })
+
+
+@app.get("/portal/outreach/wizard", response_class=HTMLResponse)
+async def sequence_wizard(request: Request, _: str = Depends(require_auth)):
+    files = reader.list_lead_files()
+    # Only show files that are not sequences themselves — filter to enriched/verified/leadgen stages
+    source_files = [f for f in files if f.stage in ("enriched", "verified", "leadgen") and f.row_count > 0]
+    # Also include outreach source lists
+    extra_sources = []
+    for user_dir in Path("/root/.openclaw/workspace/outreach").glob("user_*"):
+        for p in user_dir.glob("source_list*.csv"):
+            try:
+                count = sum(1 for _ in open(p, encoding="utf-8-sig")) - 1
+                extra_sources.append({"path": str(p), "name": p.name, "row_count": count, "label": f"[Outreach source] {p.name} ({count} leads)"})
+            except Exception:
+                pass
+    return templates.TemplateResponse("sequence_wizard.html", {
+        "request": request,
+        "source_files": source_files,
+        "extra_sources": extra_sources,
+    })
+
+
+@app.post("/portal/outreach/wizard/generate")
+async def sequence_wizard_generate(
+    request: Request,
+    input_path: str = Form(...),
+    sender_name: str = Form(""),
+    campaign_name: str = Form(""),
+    allow_personal: str = Form("off"),
+    sequence_type: str = Form("multi"),
+    csrf: str = Form(""),
+    _: str = Depends(require_auth),
+):
+    if not verify_csrf_token(csrf):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
+    # Validate input path is within allowed dirs
+    safe_path = Path(input_path).resolve()
+    allowed_roots = [
+        Path("/root/.openclaw/workspace/leads").resolve(),
+        Path("/root/.openclaw/workspace/outreach").resolve(),
+    ]
+    if not any(str(safe_path).startswith(str(r)) for r in allowed_roots):
+        raise HTTPException(status_code=400, detail="Invalid source path")
+    if not safe_path.exists():
+        raise HTTPException(status_code=404, detail="Source file not found")
+
+    # Build output path
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_campaign = re.sub(r"[^\w\-]", "_", campaign_name.strip() or "sequences")
+    out_path = Path("/root/.openclaw/workspace/leads") / f"sequences_{safe_campaign}_{ts}.csv"
+
+    # Build command — never include send flags
+    cmd = [
+        "python3", str(OUTREACH_SCRIPTS / "generate_sequences.py"),
+        str(safe_path),
+        "--output", str(out_path),
+        "--sender-name", sender_name.strip(),
+        "--campaign-name", campaign_name.strip() or "portal-wizard",
+    ]
+    if sequence_type == "single":
+        cmd.append("--single")
+    if allow_personal == "on":
+        cmd.append("--allow-personal")
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if result.returncode != 0:
+            error_msg = (result.stderr or result.stdout or "Unknown error")[:300]
+            raise HTTPException(status_code=500, detail=f"Generation failed: {error_msg}")
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Generation timed out (>2 min). Try a smaller file.")
+
+    row_count = sum(1 for _ in open(out_path, encoding="utf-8-sig")) - 1 if out_path.exists() else 0
+    return RedirectResponse(
+        f"/portal/outreach?msg=wizard-done&sequences={out_path.name}&count={row_count}",
+        status_code=303
+    )
+
+
+@app.get("/portal/imap-settings", response_class=HTMLResponse)
+async def imap_settings(request: Request, _: str = Depends(require_auth)):
+    accounts = imap_auth.list_accounts()
+    return templates.TemplateResponse("imap_settings.html", {
+        "request": request,
+        "accounts": accounts,
+    })
+
+
+@app.post("/portal/imap-settings/save")
+async def imap_settings_save(
+    request: Request,
+    email_addr: str = Form(...),
+    app_password: str = Form(...),
+    imap_server: str = Form("imap.gmail.com"),
+    imap_port: int = Form(993),
+    csrf: str = Form(""),
+    _: str = Depends(require_auth),
+):
+    if not verify_csrf_token(csrf):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
+    email_addr = email_addr.strip().lower()
+    if not email_addr or "@" not in email_addr:
+        raise HTTPException(status_code=400, detail="Invalid email address")
+    if not app_password.strip():
+        raise HTTPException(status_code=400, detail="App password required")
+
+    imap_auth.save_account(email_addr, app_password.strip(), imap_server, imap_port, configured_by="portal")
+    return RedirectResponse("/portal/imap-settings?msg=saved", status_code=303)
+
+
+@app.post("/portal/imap-settings/test")
+async def imap_settings_test(
+    request: Request,
+    email_addr: str = Form(...),
+    csrf: str = Form(""),
+    _: str = Depends(require_auth),
+):
+    if not verify_csrf_token(csrf):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
+    ok, msg = imap_auth.test_connection(email_addr.strip().lower())
+    status = "ok" if ok else "fail"
+    return RedirectResponse(
+        f"/portal/imap-settings?msg=test-{status}&detail={quote_plus(msg[:80])}",
+        status_code=303
+    )
+
+
+@app.post("/portal/imap-settings/delete")
+async def imap_settings_delete(
+    request: Request,
+    email_addr: str = Form(...),
+    csrf: str = Form(""),
+    _: str = Depends(require_auth),
+):
+    if not verify_csrf_token(csrf):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
+    imap_auth.delete_account(email_addr.strip().lower())
+    return RedirectResponse("/portal/imap-settings?msg=deleted", status_code=303)
+
+
 @app.get("/portal/deliverability", response_class=HTMLResponse)
 async def deliverability(request: Request, _: str = Depends(require_auth)):
     report = reader.get_deliverability_report()
@@ -329,6 +595,100 @@ async def deliverability(request: Request, _: str = Depends(require_auth)):
         "report": report,
         "suppressions": suppressions,
     })
+
+
+@app.post("/portal/deliverability/run-check")
+async def deliverability_run_check(
+    request: Request,
+    domain: str = Form(""),
+    csrf: str = Form(""),
+    _: str = Depends(require_auth),
+):
+    if not verify_csrf_token(csrf):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
+    if not domain:
+        campaigns = reader.get_active_campaigns()
+        for c in campaigns:
+            for s in c.senders:
+                email = s.get("email", "")
+                if "@" in email:
+                    domain = email.split("@")[1]
+                    break
+            if domain:
+                break
+        if not domain:
+            domain = "miraeadvisory.com"
+
+    try:
+        raw = _check_domain(domain)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Check failed: {e}")
+
+    portal_report: dict = {
+        "_domain": domain,
+        "_last_checked": datetime.now(timezone.utc).isoformat(),
+    }
+    for check_name in ("mx", "spf", "dkim", "dmarc"):
+        d = raw.get(check_name, {})
+        passed = d.get("pass", False)
+        notes = d.get("notes", [])
+        records_raw = d.get("records", [])
+        if check_name == "dkim":
+            records_str = [f"{sel}" for sel, _ in records_raw[:3]] if records_raw else []
+        else:
+            records_str = [str(r)[:80] for r in records_raw[:3]]
+        portal_report[check_name] = {
+            "status": "ok" if passed else "fail",
+            "detail": notes[0] if notes else ("No issues found" if passed else "Check failed — see notes"),
+            "notes": notes,
+            "records": records_str,
+        }
+
+    report_path = Path("/root/.openclaw/workspace/deliverability.json")
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(report_path, "w", encoding="utf-8") as f:
+        json.dump(portal_report, f, indent=2)
+
+    return RedirectResponse("/portal/deliverability?msg=checked", status_code=303)
+
+
+@app.post("/portal/imap-settings/{email_addr}/run-tracker")
+async def imap_run_tracker(
+    email_addr: str,
+    request: Request,
+    csrf: str = Form(""),
+    _: str = Depends(require_auth),
+):
+    if not verify_csrf_token(csrf):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
+    campaigns = reader.get_active_campaigns()
+    sequences_csv = None
+    for c in campaigns:
+        for s in c.senders:
+            if s.get("email", "").lower() == email_addr.lower():
+                if c.sequences_csv and c.sequences_csv.exists():
+                    sequences_csv = str(c.sequences_csv)
+                    break
+        if sequences_csv:
+            break
+
+    if not sequences_csv:
+        return RedirectResponse("/portal/imap-settings?msg=tracker-no-campaign", status_code=303)
+
+    try:
+        result = subprocess.run(
+            ["python3", str(OUTREACH_SCRIPTS / "workspace_imap_tracker.py"),
+             "--sequences", sequences_csv,
+             "--account-email", email_addr],
+            capture_output=True, text=True, timeout=60
+        )
+        status = "tracker-ok" if result.returncode == 0 else "tracker-fail"
+    except subprocess.TimeoutExpired:
+        status = "tracker-timeout"
+
+    return RedirectResponse(f"/portal/imap-settings?msg={status}", status_code=303)
 
 
 @app.get("/portal/master", response_class=HTMLResponse)

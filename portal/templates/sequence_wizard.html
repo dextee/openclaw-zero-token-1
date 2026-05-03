@@ -1,0 +1,457 @@
+{% extends "base.html" %}
+{% block title %}Sequence Wizard — SG Pipeline{% endblock %}
+{% block content %}
+
+<div class="max-w-2xl mx-auto">
+
+  {# ── Page header ─────────────────────────────────────────────────── #}
+  <div class="flex items-center gap-3 mb-6">
+    <a href="/portal/outreach" class="text-zinc-500 hover:text-zinc-300 transition-colors text-sm">← Back to Outreach</a>
+    <span class="text-zinc-700">/</span>
+    <h1 class="text-xl font-bold text-zinc-100">New Sequence Wizard</h1>
+  </div>
+
+  {# ── No-send callout ──────────────────────────────────────────────── #}
+  <div class="mb-6 px-4 py-3 rounded-lg bg-amber-900/20 border border-amber-700/40 flex items-start gap-3">
+    <span class="text-amber-400 text-base mt-0.5 shrink-0">&#9888;</span>
+    <p class="text-amber-300 text-sm leading-relaxed">
+      <span class="font-semibold">No emails will be sent.</span>
+      This wizard generates a <code class="bg-amber-900/40 px-1 py-0.5 rounded text-xs font-mono">sequences.csv</code> file only.
+      To dispatch emails, go to the <a href="/portal/outreach" class="underline hover:text-amber-200">Outreach page</a> and click Send Now.
+    </p>
+  </div>
+
+  {# ── Step indicator ───────────────────────────────────────────────── #}
+  <div class="flex items-center mb-8" id="step-indicator">
+    <div class="flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm transition-all bg-amber-500 text-zinc-900" id="dot-1">1</div>
+    <div class="flex-1 h-0.5 bg-zinc-700 transition-all" id="line-1"></div>
+    <div class="flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm transition-all bg-zinc-700 text-zinc-400" id="dot-2">2</div>
+    <div class="flex-1 h-0.5 bg-zinc-700 transition-all" id="line-2"></div>
+    <div class="flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm transition-all bg-zinc-700 text-zinc-400" id="dot-3">3</div>
+    <div class="flex-1 h-0.5 bg-zinc-700 transition-all" id="line-3"></div>
+    <div class="flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm transition-all bg-zinc-700 text-zinc-400" id="dot-4">4</div>
+  </div>
+
+  {# ══════════════════════════════════════════════════════════════════ #}
+  {# THE FORM — wraps all 4 steps                                       #}
+  {# ══════════════════════════════════════════════════════════════════ #}
+  <form method="post"
+        action="/portal/outreach/wizard/generate"
+        enctype="multipart/form-data"
+        id="wizard-form">
+
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="sequence_type" id="sequence_type_input" value="multi">
+
+    {# ── STEP 1: Choose Source File ──────────────────────────────────── #}
+    <div class="wizard-step" id="step-1">
+      <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-4">
+        <h2 class="text-lg font-semibold text-zinc-100 mb-1">Step 1 of 4 &mdash; Choose Your Lead File</h2>
+        <p class="text-zinc-500 text-sm mb-5">Select the CSV file containing leads you want to sequence.</p>
+
+        {% set has_sources = (source_files | length > 0) or (extra_sources | length > 0) %}
+
+        {% if not has_sources %}
+          <div class="rounded-lg bg-zinc-800/60 border border-zinc-700/40 px-4 py-6 text-center">
+            <div class="text-zinc-400 text-sm mb-1">No lead files found.</div>
+            <div class="text-zinc-600 text-xs">
+              <a href="/portal/upload" class="text-amber-400 hover:text-amber-300 underline">Upload a CSV</a> first, or run the lead pipeline via @miraeclawbot.
+            </div>
+          </div>
+        {% else %}
+          <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-2" for="input_path">
+            Lead file
+          </label>
+          <select name="input_path"
+                  id="input_path"
+                  class="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500"
+                  onchange="onFileSelected()">
+            <option value="">&#8212; Select a file &#8212;</option>
+
+            {% if source_files | length > 0 %}
+              <optgroup label="Lead Pipeline Files">
+                {% for f in source_files %}
+                  <option value="{{ f.path }}">[{{ f.stage | upper }}] {{ f.name }} ({{ f.row_count | fmt_int }} rows)</option>
+                {% endfor %}
+              </optgroup>
+            {% endif %}
+
+            {% if extra_sources | length > 0 %}
+              <optgroup label="Outreach Source Lists">
+                {% for s in extra_sources %}
+                  <option value="{{ s.path }}">[{{ s.label }}] {{ s.name }} ({{ s.row_count | fmt_int }} rows)</option>
+                {% endfor %}
+              </optgroup>
+            {% endif %}
+          </select>
+          <p class="text-xs text-zinc-600 mt-2">
+            Files must have an <code class="bg-zinc-800 px-1 rounded font-mono">email</code> column.
+            Verified files (stage: verified) are recommended.
+          </p>
+        {% endif %}
+      </div>
+
+      <div class="flex justify-end">
+        <button type="button"
+                id="btn-next-1"
+                onclick="showStep(2)"
+                disabled
+                class="px-5 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-900 font-semibold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+          Next &#8594;
+        </button>
+      </div>
+    </div>
+
+    {# ── STEP 2: Sender Details ──────────────────────────────────────── #}
+    <div class="wizard-step hidden" id="step-2">
+      <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-4">
+        <h2 class="text-lg font-semibold text-zinc-100 mb-1">Step 2 of 4 &mdash; Sender Details</h2>
+        <p class="text-zinc-500 text-sm mb-5">Provide your name for the email signature.</p>
+
+        <div class="space-y-5">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-2" for="sender_name">
+              Your name <span class="text-red-400">*</span>
+            </label>
+            <input type="text"
+                   name="sender_name"
+                   id="sender_name"
+                   placeholder="e.g. Wei Xian"
+                   class="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500">
+            <p class="text-xs text-zinc-600 mt-1.5">
+              As it appears in outgoing emails. Email address, title, and company default to Mirae Advisory settings.
+            </p>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-2" for="campaign_name">
+              Campaign name <span class="text-zinc-600">(optional)</span>
+            </label>
+            <input type="text"
+                   name="campaign_name"
+                   id="campaign_name"
+                   placeholder="e.g. Construction Q2 2026"
+                   class="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500">
+            <p class="text-xs text-zinc-600 mt-1.5">Used for tracking and deduplication across campaigns.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between">
+        <button type="button" onclick="showStep(1)"
+                class="px-5 py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-sm transition-colors">
+          &#8592; Back
+        </button>
+        <button type="button" onclick="validateStep2AndAdvance()"
+                class="px-5 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-900 font-semibold text-sm transition-colors">
+          Next &#8594;
+        </button>
+      </div>
+    </div>
+
+    {# ── STEP 3: Sequence Options ─────────────────────────────────────── #}
+    <div class="wizard-step hidden" id="step-3">
+      <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-4">
+        <h2 class="text-lg font-semibold text-zinc-100 mb-1">Step 3 of 4 &mdash; Sequence Options</h2>
+        <p class="text-zinc-500 text-sm mb-5">Choose the email cadence and filtering settings.</p>
+
+        {# Sequence type cards #}
+        <div class="mb-6">
+          <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Sequence type</label>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+            <div class="seq-card cursor-pointer rounded-xl border-2 border-amber-500 bg-zinc-800/50 p-4 transition-all"
+                 data-value="multi"
+                 onclick="selectSequenceType('multi')">
+              <div class="flex items-start gap-3">
+                <div class="seq-radio mt-0.5 w-4 h-4 rounded-full border-2 border-amber-500 bg-amber-500 flex items-center justify-center shrink-0">
+                  <div class="seq-radio-inner w-1.5 h-1.5 rounded-full bg-zinc-900"></div>
+                </div>
+                <div>
+                  <div class="text-zinc-100 font-semibold text-sm mb-1">3-Touch Sequence</div>
+                  <div class="text-zinc-400 text-xs leading-relaxed">Intro email + 2 follow-ups, 3 days apart. Best for cold outreach.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="seq-card cursor-pointer rounded-xl border-2 border-zinc-700 bg-zinc-800/50 p-4 transition-all"
+                 data-value="single"
+                 onclick="selectSequenceType('single')">
+              <div class="flex items-start gap-3">
+                <div class="seq-radio mt-0.5 w-4 h-4 rounded-full border-2 border-zinc-600 flex items-center justify-center shrink-0">
+                  <div class="seq-radio-inner w-1.5 h-1.5 rounded-full"></div>
+                </div>
+                <div>
+                  <div class="text-zinc-100 font-semibold text-sm mb-1">Single Email</div>
+                  <div class="text-zinc-400 text-xs leading-relaxed">One intro email only. Use for urgent or time-sensitive sends.</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {# Personal email filter #}
+        <div class="mb-6">
+          <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Email filters</label>
+          <label class="flex items-start gap-3 cursor-pointer group">
+            <input type="checkbox"
+                   name="allow_personal"
+                   id="allow_personal"
+                   value="on"
+                   class="w-4 h-4 mt-0.5 rounded border-zinc-600 bg-zinc-800 shrink-0">
+            <div>
+              <div class="text-zinc-200 text-sm font-medium group-hover:text-zinc-100">Include personal email addresses (gmail, yahoo, hotmail, etc.)</div>
+              <div class="text-zinc-500 text-xs mt-0.5">Unchecked (default): personal domains are filtered out. B2B best practice.</div>
+            </div>
+          </label>
+        </div>
+
+        {# Email preview card #}
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Template preview</label>
+          <div class="rounded-xl bg-zinc-800/60 border border-zinc-700/50 p-4 font-mono text-xs text-zinc-400 leading-relaxed">
+            <div class="text-zinc-300 font-semibold mb-2">Subject: [financing / cashflow management] for [Company Name]</div>
+            <div class="border-t border-zinc-700/50 pt-2 space-y-1.5">
+              <div>Hi [First Name],</div>
+              <div class="mt-1">I'm reaching out because [Company Name] looks like it could benefit from...</div>
+              <div>[Personalised body based on industry]</div>
+              <div class="mt-2">Best,</div>
+              <div class="text-amber-400/80" id="preview_sender_name">[Your Sender Name]</div>
+              <div>Mirae Advisory</div>
+            </div>
+          </div>
+          <p class="text-xs text-zinc-600 mt-1.5">Actual template is loaded from <code class="bg-zinc-800 px-1 rounded font-mono">sg-outreach/references/</code></p>
+        </div>
+
+      </div>
+
+      <div class="flex justify-between">
+        <button type="button" onclick="showStep(2)"
+                class="px-5 py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-sm transition-colors">
+          &#8592; Back
+        </button>
+        <button type="button" onclick="showStep(4)"
+                class="px-5 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-900 font-semibold text-sm transition-colors">
+          Next &#8594;
+        </button>
+      </div>
+    </div>
+
+    {# ── STEP 4: Review & Generate ────────────────────────────────────── #}
+    <div class="wizard-step hidden" id="step-4">
+      <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-4">
+        <h2 class="text-lg font-semibold text-zinc-100 mb-1">Step 4 of 4 &mdash; Review &amp; Generate</h2>
+        <p class="text-zinc-500 text-sm mb-5">Confirm your settings, then generate the sequences file.</p>
+
+        {# Summary card #}
+        <div class="rounded-xl bg-zinc-800/50 border border-zinc-700/50 divide-y divide-zinc-700/40 mb-5">
+          <div class="flex items-center justify-between px-4 py-3">
+            <span class="text-xs font-semibold uppercase tracking-wider text-zinc-500 shrink-0 mr-4">Source file</span>
+            <span class="text-zinc-200 text-sm font-medium text-right truncate max-w-xs" id="summary_file">&#8212;</span>
+          </div>
+          <div class="flex items-center justify-between px-4 py-3">
+            <span class="text-xs font-semibold uppercase tracking-wider text-zinc-500 shrink-0 mr-4">Sender</span>
+            <span class="text-zinc-200 text-sm font-medium" id="summary_sender">&#8212;</span>
+          </div>
+          <div class="flex items-center justify-between px-4 py-3">
+            <span class="text-xs font-semibold uppercase tracking-wider text-zinc-500 shrink-0 mr-4">Campaign</span>
+            <span class="text-zinc-400 text-sm italic" id="summary_campaign">None</span>
+          </div>
+          <div class="flex items-center justify-between px-4 py-3">
+            <span class="text-xs font-semibold uppercase tracking-wider text-zinc-500 shrink-0 mr-4">Sequence type</span>
+            <span class="text-zinc-200 text-sm font-medium" id="summary_seq_type">3-Touch Sequence</span>
+          </div>
+          <div class="flex items-center justify-between px-4 py-3">
+            <span class="text-xs font-semibold uppercase tracking-wider text-zinc-500 shrink-0 mr-4">Personal email filter</span>
+            <span class="text-sm font-semibold" id="summary_filter"><span class="text-emerald-400">On</span></span>
+          </div>
+        </div>
+
+        {# Big amber warning #}
+        <div class="rounded-xl bg-amber-900/20 border border-amber-700/50 px-5 py-4 mb-5 flex items-start gap-3">
+          <span class="text-amber-400 text-xl shrink-0 mt-0.5">&#9888;</span>
+          <div>
+            <div class="text-amber-300 font-semibold text-sm mb-1">No emails will be sent.</div>
+            <div class="text-amber-400/80 text-xs leading-relaxed">
+              Sequences will be saved as a CSV file.
+              You must go to the <a href="/portal/outreach" class="underline hover:text-amber-300">Outreach page</a>
+              and click <strong>Send Now</strong> to dispatch.
+            </div>
+          </div>
+        </div>
+
+        {# Generate button #}
+        <button type="submit"
+                class="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base transition-colors flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          Generate Sequences &#8594;
+        </button>
+        <p class="text-xs text-zinc-600 text-center mt-2">Generation takes ~5&ndash;30 seconds depending on file size.</p>
+      </div>
+
+      <div class="flex justify-between">
+        <button type="button" onclick="showStep(3)"
+                class="px-5 py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-sm transition-colors">
+          &#8592; Back
+        </button>
+      </div>
+    </div>
+
+  </form>{# end wizard-form #}
+</div>
+
+<script>
+(function () {
+  var currentStep = 1;
+  var STEPS = 4;
+
+  /* ── showStep ──────────────────────────────────────────────────── */
+  window.showStep = function (n) {
+    document.querySelectorAll('.wizard-step').forEach(function (el) {
+      el.classList.add('hidden');
+    });
+    var target = document.getElementById('step-' + n);
+    if (target) target.classList.remove('hidden');
+    currentStep = n;
+    updateStepIndicator(n);
+    if (n === 4) updateSummary();
+  };
+
+  /* ── Step indicator ────────────────────────────────────────────── */
+  function updateStepIndicator(active) {
+    for (var i = 1; i <= STEPS; i++) {
+      var dot = document.getElementById('dot-' + i);
+      if (!dot) continue;
+      // reset all dynamic classes
+      dot.className = 'flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm transition-all';
+      if (i < active) {
+        dot.className += ' bg-emerald-500 text-zinc-900';
+      } else if (i === active) {
+        dot.className += ' bg-amber-500 text-zinc-900';
+      } else {
+        dot.className += ' bg-zinc-700 text-zinc-400';
+      }
+      // connector lines (1, 2, 3 only — no line-4)
+      var line = document.getElementById('line-' + i);
+      if (line) {
+        line.className = 'flex-1 h-0.5 transition-all ' + (i < active ? 'bg-emerald-600' : 'bg-zinc-700');
+      }
+    }
+  }
+
+  /* ── File selection (step 1) ───────────────────────────────────── */
+  window.onFileSelected = function () {
+    var sel = document.getElementById('input_path');
+    var btn = document.getElementById('btn-next-1');
+    if (btn) btn.disabled = !(sel && sel.value);
+  };
+
+  /* ── Sequence type cards (step 3) ──────────────────────────────── */
+  window.selectSequenceType = function (val) {
+    document.getElementById('sequence_type_input').value = val;
+    document.querySelectorAll('.seq-card').forEach(function (card) {
+      var radio    = card.querySelector('.seq-radio');
+      var inner    = card.querySelector('.seq-radio-inner');
+      var selected = card.dataset.value === val;
+      if (selected) {
+        card.classList.remove('border-zinc-700');
+        card.classList.add('border-amber-500');
+        if (radio) {
+          radio.classList.remove('border-zinc-600');
+          radio.classList.add('border-amber-500', 'bg-amber-500');
+        }
+        if (inner) {
+          inner.style.backgroundColor = 'rgb(24 24 27)'; /* zinc-900 */
+        }
+      } else {
+        card.classList.remove('border-amber-500');
+        card.classList.add('border-zinc-700');
+        if (radio) {
+          radio.classList.remove('border-amber-500', 'bg-amber-500');
+          radio.classList.add('border-zinc-600');
+        }
+        if (inner) {
+          inner.style.backgroundColor = 'transparent';
+        }
+      }
+    });
+  };
+
+  /* ── Step 2 validation ─────────────────────────────────────────── */
+  window.validateStep2AndAdvance = function () {
+    var nameEl = document.getElementById('sender_name');
+    var name   = nameEl ? nameEl.value.trim() : '';
+    if (!name) {
+      if (nameEl) {
+        nameEl.classList.add('border-red-500');
+        nameEl.placeholder = 'Required — please enter your name';
+        nameEl.focus();
+      }
+      return;
+    }
+    if (nameEl) nameEl.classList.remove('border-red-500');
+    // Mirror into step-3 preview
+    var prev = document.getElementById('preview_sender_name');
+    if (prev) prev.textContent = name;
+    showStep(3);
+  };
+
+  /* ── Update step-4 summary ─────────────────────────────────────── */
+  function updateSummary() {
+    // Source file label
+    var sel = document.getElementById('input_path');
+    var summaryFile = document.getElementById('summary_file');
+    if (sel && summaryFile) {
+      var opt = sel.options[sel.selectedIndex];
+      summaryFile.textContent = (opt && opt.value) ? opt.text : '—';
+    }
+
+    // Sender name
+    var senderEl = document.getElementById('sender_name');
+    var summarySender = document.getElementById('summary_sender');
+    if (summarySender) {
+      summarySender.textContent = (senderEl ? senderEl.value.trim() : '') || '—';
+    }
+
+    // Campaign name
+    var campEl = document.getElementById('campaign_name');
+    var summaryCampaign = document.getElementById('summary_campaign');
+    if (summaryCampaign) {
+      var campVal = campEl ? campEl.value.trim() : '';
+      if (campVal) {
+        summaryCampaign.textContent = campVal;
+        summaryCampaign.className = 'text-zinc-200 text-sm font-medium';
+      } else {
+        summaryCampaign.textContent = 'None';
+        summaryCampaign.className = 'text-zinc-400 text-sm italic';
+      }
+    }
+
+    // Sequence type
+    var seqVal = document.getElementById('sequence_type_input').value;
+    var summarySeq = document.getElementById('summary_seq_type');
+    if (summarySeq) {
+      summarySeq.textContent = seqVal === 'single' ? 'Single Email' : '3-Touch Sequence';
+    }
+
+    // Personal email filter
+    var allowPersonalEl = document.getElementById('allow_personal');
+    var summaryFilter = document.getElementById('summary_filter');
+    if (summaryFilter) {
+      var isOn = !(allowPersonalEl && allowPersonalEl.checked);
+      summaryFilter.innerHTML = isOn
+        ? '<span class="text-emerald-400">On</span>'
+        : '<span class="text-zinc-400">Off</span>';
+    }
+  }
+
+  /* ── Init ──────────────────────────────────────────────────────── */
+  showStep(1);
+  onFileSelected();
+}());
+</script>
+
+{% endblock %}

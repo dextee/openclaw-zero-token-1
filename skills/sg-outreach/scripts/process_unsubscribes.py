@@ -18,10 +18,20 @@ import sys
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(SKILL_DIR, "scripts"))
 import outreach_history as oh
+import imap_auth
 
 
-def resolve_config(chat_id: str) -> dict:
-    """Read SMTP/IMAP config: per-user first, then global."""
+def resolve_config(chat_id: str, account_email: str | None = None) -> dict:
+    """Read IMAP config. Priority: central imap_accounts.json > per-user config > global config."""
+    if account_email:
+        account = imap_auth.get_account(account_email)
+        if account:
+            return {
+                "email": account["email"],
+                "app_password": account["app_password"],
+                "imap_host": account.get("imap_server", imap_auth.DEFAULT_IMAP_SERVER),
+                "imap_port": account.get("imap_port", imap_auth.DEFAULT_IMAP_PORT),
+            }
     paths = [
         f"/root/.openclaw/workspace/outreach/user_{chat_id}/.workspace_smtp_config.json",
         os.path.join(SKILL_DIR, ".workspace_smtp_config.json"),
@@ -74,9 +84,11 @@ def extract_addresses_from_msg(msg_bytes: bytes) -> list[str]:
 def main():
     parser = argparse.ArgumentParser(description="Unsubscribe IMAP sweep")
     parser.add_argument("--user-id", required=True)
+    parser.add_argument("--account-email", default=None,
+                        help="Email from central imap_accounts.json store")
     args = parser.parse_args()
 
-    config = resolve_config(args.user_id)
+    config = resolve_config(args.user_id, args.account_email)
     imap_host = config.get("imap_host", "")
     imap_port = int(config.get("imap_port", 993))
     email_addr = config.get("email", "")

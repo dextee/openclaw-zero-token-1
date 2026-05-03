@@ -33,22 +33,14 @@ SPAM_WORDS = [
 FINANCING_VARIANT = {
     "email_number": 1,
     "subjects": [
-        "Need Business Financing? We Compare Lenders So You Don't Have To",
-        "Tired of Bank Rejections? We Find the Right Financing for You",
+        "{{company_name}}",
+        "Worth exploring?",
     ],
     "body": (
         "Hi {{first_name}},\n\n"
-        "Mirae Advisory here — we are a Singapore-based SME financing firm led by former bankers. "
-        "We help businesses like {{company_name}} get the right funding without the run-around.\n\n"
-        "We offer:\n"
-        "- Working Capital Loan\n"
-        "- Trade Lines\n"
-        "- Invoice Factoring\n"
-        "- Revenue Based Financing\n"
-        "- Property Backed Loan\n"
-        "- Personal Loan\n\n"
-        "Quick question: is {{company_name}} looking to expand or optimize your funding setup in the next 6 months?\n\n"
-        "If yes, grab a 15-min slot here and we'll walk you through what you'd likely qualify for — no obligation:\n"
+        "Looks like {{company_name}} is growing fast in the {{area}} {{industry}} space.\n\n"
+        "Are you exploring funding options to support that growth, or are you all set for now?\n\n"
+        "If you're comparing lenders, worth a 15-min call to see what you'd likely qualify for:\n"
         "https://calendar.app.google/Vt8th4ByKcCxD4Fv6\n\n"
         "Mirae Advisory | miraeadvisory.com\n"
         "One Raffles Place Mall, #02-01, Singapore 048616\n"

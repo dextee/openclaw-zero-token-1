@@ -1,22 +1,81 @@
 {% extends "base.html" %}
 {% block title %}Deliverability — SG Pipeline{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-bold text-zinc-100 mb-6">Email Deliverability</h1>
 
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-bold text-zinc-100">Email Deliverability</h1>
+    {% if report.get('_domain') %}
+      <p class="text-xs text-zinc-500 mt-1">
+        Domain: <span class="text-zinc-300">{{ report['_domain'] }}</span>
+        {% if report.get('_last_checked') %}
+          &nbsp;·&nbsp; Last checked: {{ report['_last_checked'][:10] }}
+        {% endif %}
+      </p>
+    {% endif %}
+  </div>
+  <form method="post" action="/portal/deliverability/run-check">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <button type="submit"
+      class="px-4 py-2 rounded-lg bg-amber-600/80 hover:bg-amber-500 text-zinc-950 text-sm font-semibold transition-colors">
+      ↻ Run Check Now
+    </button>
+  </form>
+</div>
+
+{# ── Flash messages ─────────────────────────────────────────────────── #}
+{% set msg = request.query_params.get('msg') %}
+{% if msg == 'checked' %}
+  <div class="mb-6 px-4 py-3 rounded-lg bg-emerald-900/30 border border-emerald-700/50 text-emerald-300 text-sm font-medium">
+    Deliverability check completed — results below.
+  </div>
+{% endif %}
+
+{# ── Check cards ────────────────────────────────────────────────────── #}
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
   {% for check, data in report.items() %}
-  <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-    <div class="text-zinc-500 text-xs uppercase tracking-wider mb-2">{{ check }}</div>
-    <div class="text-2xl font-bold
-      {% if data.status == 'ok' %}text-emerald-400{% elif data.status == 'unknown' %}text-zinc-500{% else %}text-red-400{% endif %}">
-      {{ data.status | title }}
+  {% if not check.startswith('_') %}
+  <div class="bg-zinc-900 border {% if data.status == 'ok' %}border-emerald-800/50{% elif data.status == 'fail' %}border-red-800/50{% else %}border-zinc-800{% endif %} rounded-xl p-5">
+    <div class="flex items-center justify-between mb-3">
+      <div class="text-zinc-400 text-xs uppercase tracking-wider font-semibold">{{ check }}</div>
+      <span class="inline-flex px-2 py-0.5 rounded text-xs font-bold
+        {% if data.status == 'ok' %}bg-emerald-900/40 text-emerald-300 border border-emerald-800/50
+        {% elif data.status == 'fail' %}bg-red-900/40 text-red-300 border border-red-800/50
+        {% else %}bg-zinc-800 text-zinc-400 border border-zinc-700{% endif %}">
+        {% if data.status == 'ok' %}✓ Pass{% elif data.status == 'fail' %}✗ Fail{% else %}Unknown{% endif %}
+      </span>
     </div>
-    <div class="text-zinc-600 text-xs mt-2">{{ data.detail }}</div>
+    <div class="text-xs text-zinc-500 leading-relaxed">{{ data.detail }}</div>
+    {% if data.get('notes') and data.notes | length > 1 %}
+      <ul class="mt-2 space-y-1">
+        {% for note in data.notes[1:3] %}
+          <li class="text-xs text-amber-400/70">→ {{ note[:100] }}{% if note | length > 100 %}...{% endif %}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
   </div>
+  {% endif %}
   {% endfor %}
 </div>
 
-<h2 class="text-lg font-semibold text-zinc-100 mb-4">Suppression List ({{ suppressions | length }} entries)</h2>
+{# ── Fix Instructions ──────────────────────────────────────────────── #}
+{% set has_failures = report.values() | selectattr('status', 'equalto', 'fail') | list | length > 0 %}
+{% if has_failures %}
+<div class="bg-zinc-900 border border-amber-800/40 rounded-xl p-5 mb-8">
+  <h2 class="text-sm font-semibold text-amber-300 mb-3">Recommended Fix Order</h2>
+  <ol class="space-y-2 text-xs text-zinc-400 list-decimal list-inside">
+    <li>Enable DKIM in Google Workspace Admin → Apps → Google Workspace → Gmail → Authenticate email (biggest spam impact)</li>
+    <li>Ensure SPF includes <code class="bg-zinc-800 px-1 rounded">include:_spf.google.com</code> for Google Workspace senders</li>
+    <li>Add DMARC if missing: <code class="bg-zinc-800 px-1 rounded">v=DMARC1; p=quarantine; rua=mailto:admin@YOURDOMAIN.com</code></li>
+    <li>Once DKIM + SPF confirmed, tighten DMARC from <code class="bg-zinc-800 px-1 rounded">p=none</code> → <code class="bg-zinc-800 px-1 rounded">p=quarantine</code></li>
+  </ol>
+</div>
+{% endif %}
+
+{# ── Suppression List ──────────────────────────────────────────────── #}
+<div class="flex items-center justify-between mb-3">
+  <h2 class="text-base font-semibold text-zinc-200">Suppression List <span class="text-zinc-500 font-normal text-sm">({{ suppressions | length }} entries)</span></h2>
+</div>
 <div class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
   <div class="overflow-x-auto">
     <table class="w-full text-sm text-left">
@@ -35,7 +94,7 @@
           <td class="px-5 py-3.5 text-zinc-500">{{ s.date }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="3" class="px-5 py-8 text-zinc-500 text-center">No suppressions</td></tr>
+        <tr><td colspan="3" class="px-5 py-8 text-zinc-500 text-center text-sm">No suppressions</td></tr>
         {% endfor %}
       </tbody>
     </table>

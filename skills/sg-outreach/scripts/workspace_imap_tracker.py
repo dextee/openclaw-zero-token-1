@@ -35,14 +35,27 @@ colorama_init(autoreset=True)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE = os.path.join(SKILL_DIR, ".workspace_smtp_config.json")
 
-# Import global outreach history
+# Import global outreach history and IMAP auth store
 sys.path.insert(0, os.path.join(SKILL_DIR, "scripts"))
 import outreach_history as oh
+import imap_auth
 
 DEFAULT_LOOKBACK_DAYS = 30
 
 
-def _load_config() -> dict:
+def _load_config(account_email: str | None = None) -> dict:
+    """Load IMAP config. If account_email given, reads from central imap_accounts.json store."""
+    if account_email:
+        account = imap_auth.get_account(account_email)
+        if not account:
+            return {}
+        # Normalise keys to match what _connect_imap expects
+        return {
+            "email": account["email"],
+            "app_password": account["app_password"],
+            "imap_host": account.get("imap_server", imap_auth.DEFAULT_IMAP_SERVER),
+            "imap_port": account.get("imap_port", imap_auth.DEFAULT_IMAP_PORT),
+        }
     if not os.path.exists(CONFIG_FILE):
         return {}
     with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -202,10 +215,15 @@ def check_bounces(mail: imaplib.IMAP4_SSL, since_date: datetime) -> list[dict]:
     return bounces
 
 
-def check_replies(sequences_csv: str, lookback_days: int = DEFAULT_LOOKBACK_DAYS) -> dict:
-    config = _load_config()
+def check_replies(sequences_csv: str, lookback_days: int = DEFAULT_LOOKBACK_DAYS,
+                  account_email: str | None = None) -> dict:
+    config = _load_config(account_email)
     if not config:
-        print(f"{Fore.RED}Error: {CONFIG_FILE} not found.{Style.RESET_ALL}")
+        if account_email:
+            print(f"{Fore.RED}Error: No IMAP credentials found for {account_email}.{Style.RESET_ALL}")
+            print(f"  Run: python3 imap_auth.py save {account_email} <app_password>")
+        else:
+            print(f"{Fore.RED}Error: {CONFIG_FILE} not found.{Style.RESET_ALL}")
         sys.exit(1)
 
     with open(sequences_csv, "r", encoding="utf-8-sig") as f:
@@ -366,9 +384,11 @@ def main():
                         help="Days to look back for replies (default: 30)")
     parser.add_argument("--report", action="store_true",
                         help="Generate performance report after checking replies")
+    parser.add_argument("--account-email", default=None,
+                        help="Email address from central imap_accounts.json store (overrides .workspace_smtp_config.json)")
     args = parser.parse_args()
 
-    check_replies(args.sequences, lookback_days=args.lookback)
+    check_replies(args.sequences, lookback_days=args.lookback, account_email=args.account_email)
 
     if args.report:
         generate_report(args.sequences)

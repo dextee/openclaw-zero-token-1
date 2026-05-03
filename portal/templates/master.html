@@ -30,31 +30,5 @@
   </div>
 </div>
 
-<button onclick="startEnrichment()" class="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-sm rounded border border-amber-500/20 transition-colors">
-  Start Enrichment
-</button>
-
-<div id="sse-output" class="mt-5 font-mono text-xs bg-zinc-950 border border-zinc-800 rounded-xl p-4 h-72 overflow-auto hidden text-zinc-400"></div>
-
-<script>
-function startEnrichment() {
-  var out = document.getElementById('sse-output');
-  out.style.display = 'block';
-  out.innerHTML = '';
-  var evtSource = new EventSource('/portal/master/enrich-stream');
-  evtSource.onmessage = function(e) {
-    var line = document.createElement('div');
-    line.textContent = e.data;
-    out.appendChild(line);
-    out.scrollTop = out.scrollHeight;
-  };
-  evtSource.onerror = function() {
-    evtSource.close();
-    var line = document.createElement('div');
-    line.className = 'text-zinc-500';
-    line.textContent = '[STREAM CLOSED]';
-    out.appendChild(line);
-  };
-}
-</script>
+<div class="text-zinc-600 text-xs mt-2">Enrichment runs via Telegram bot — send "enrich leads" to @miraeclawbot</div>
 {% endblock %}

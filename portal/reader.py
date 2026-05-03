@@ -7,7 +7,7 @@ import csv
 import json
 import hashlib
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 SKILL_BASE = Path("/root/openclaw-zero-token/skills")
 LEADS_SEARCH_DIRS = [
@@ -21,6 +21,7 @@ CAMPAIGN_BASES = [
     Path("/root/.openclaw/workspace/campaigns"),
     Path("/root/.openclaw/workspace/leads"),
 ]
+OUTREACH_BASE = Path("/root/.openclaw/workspace/outreach")
 
 @dataclass
 class LeadFile:
@@ -48,12 +49,38 @@ class Campaign:
     file_id: str = ""
 
 @dataclass
+class ActiveCampaign:
+    user_id: str
+    sender_name: str
+    sender_company: str
+    daily_limit: int
+    sequences_csv: Path
+    total_sequences: int
+    sent: int
+    pending: int
+    failed: int
+    replied: int
+    reply_rate: float
+    positive_replies: int
+    negative_replies: int
+    bounced: int
+    senders: list
+    next_run_sgt: str
+    campaign_started: str
+    is_paused: bool
+    days_remaining: int
+    pct_complete: float
+    consecutive_failures: int
+    last_run_ok: Optional[bool]  # None = no runs yet
+
+@dataclass
 class MasterStat:
     industry: str
     file_count: int
     total_leads: int
     last_updated: Optional[datetime] = None
 
+_CSV_CACHE_MAX = 80
 _csv_cache: dict[str, tuple[list[dict], list[str], datetime]] = {}
 
 
@@ -84,6 +111,8 @@ def _get_cached_csv(path: Path) -> tuple[list[dict], list[str]]:
         if cached_mtime == mtime:
             return cached_rows, cached_headers
     rows, headers = _read_csv(path)
+    if len(_csv_cache) >= _CSV_CACHE_MAX:
+        _csv_cache.pop(next(iter(_csv_cache)))
     _csv_cache[key] = (rows, headers, mtime)
     return rows, headers
 
@@ -98,7 +127,7 @@ def _count_rows(path: Path) -> int:
 
 
 def _stage_from_path(path: Path) -> str:
-    """Determine stage from directory name."""
+    """Determine stage from directory name, then filename."""
     parts = [p.lower() for p in path.parts]
     if "sg-leadgen" in parts or "leadgen" in parts:
         return "leadgen"
@@ -108,6 +137,15 @@ def _stage_from_path(path: Path) -> str:
         return "verified"
     if "sg-outreach" in parts or "outreach" in parts:
         return "outreach"
+    name = path.name.lower()
+    if "sequence" in name:
+        return "sequences"
+    if "verif" in name:
+        return "verified"
+    if "enrich" in name:
+        return "enriched"
+    if "_raw" in name or "_dedup" in name or "_scored" in name or "_pipeline" in name:
+        return "leadgen"
     return "other"
 
 
@@ -320,6 +358,8 @@ def write_row_edit(lead_file: LeadFile, row_hash: str, col: str, value: str) -> 
     if not rows:
         return False, "File is empty or unreadable"
 
+    value = formula_inject_protect(value)  # sanitise before write
+
     found = False
     for i, r in enumerate(rows):
         if _compute_row_hash(r) == row_hash:
@@ -419,19 +459,174 @@ def get_campaign_rows(campaign: Campaign) -> list[dict]:
     return []
 
 
+def _calc_next_run_sgt(cron_expr: str) -> str:
+    """Next fire time in SGT. Server is Europe/Berlin (CEST=UTC+2); cron uses local time."""
+    try:
+        from zoneinfo import ZoneInfo
+        parts = cron_expr.split()
+        if len(parts) < 2:
+            return "Unknown"
+        minute = int(parts[0])
+        hour = int(parts[1])
+        server_tz = ZoneInfo("Europe/Berlin")
+        sgt_tz = ZoneInfo("Asia/Singapore")
+        now_server = datetime.now(server_tz)
+        next_server = now_server.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if next_server <= now_server:
+            next_server += timedelta(days=1)
+        return next_server.astimezone(sgt_tz).strftime("%a %-d %b, %I:%M %p SGT")
+    except Exception:
+        return "Unknown"
+
+
+def get_active_campaigns() -> list[ActiveCampaign]:
+    """Read active outreach campaigns from workspace/outreach/user_*/."""
+    campaigns: list[ActiveCampaign] = []
+    if not OUTREACH_BASE.exists():
+        return campaigns
+
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    for user_dir in sorted(OUTREACH_BASE.glob("user_*")):
+        campaign_file = user_dir / "active_campaign.json"
+        if not campaign_file.exists():
+            continue
+        try:
+            with open(campaign_file, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+        except Exception:
+            continue
+
+        sequences_path_str = cfg.get("sequences_csv", "")
+        sequences_path = Path(sequences_path_str) if sequences_path_str else Path()
+        total = sent = pending = failed = replied = positive_replies = negative_replies = bounced = 0
+        # per-sender reply counts: {email: count}
+        sender_replied_map: dict[str, int] = {}
+        if sequences_path.exists():
+            try:
+                with open(sequences_path, "r", encoding="utf-8-sig", newline="") as f:
+                    reader_obj = csv.DictReader(f)
+                    for row in reader_obj:
+                        s = row.get("status", "").strip()
+                        total += 1
+                        if s == "sent":
+                            sent += 1
+                        elif s == "failed":
+                            failed += 1
+                        else:
+                            pending += 1
+                        if row.get("replied", "").strip().lower() == "true":
+                            replied += 1
+                            sentiment = row.get("reply_sentiment", "").strip()
+                            if sentiment == "Positive":
+                                positive_replies += 1
+                            elif sentiment == "Negative":
+                                negative_replies += 1
+                            s_email = row.get("sender_email", "").strip().lower()
+                            if s_email:
+                                sender_replied_map[s_email] = sender_replied_map.get(s_email, 0) + 1
+            except Exception:
+                pass
+        reply_rate = round(replied / sent * 100, 1) if sent > 0 else 0.0
+
+        senders_state = []
+        for s in cfg.get("senders", []):
+            state_file_str = s.get("state_file", "")
+            daily_lim = s.get("daily_limit", 25)
+            s_email = s.get("email", "")
+            sender_info: dict = {
+                "email": s_email,
+                "name": (s_email.split("@")[0]).title(),
+                "daily_limit": daily_lim,
+                "sent_today": 0,
+                "last_send_date": "",
+                "is_done_today": False,
+                "replied": sender_replied_map.get(s_email.lower(), 0),
+            }
+            if state_file_str:
+                sf = Path(state_file_str)
+                if sf.exists():
+                    try:
+                        with open(sf, "r", encoding="utf-8") as f:
+                            state = json.load(f)
+                        sent_today = state.get("sent_today", 0)
+                        last_date = state.get("last_send_date", "")
+                        sender_info["sent_today"] = sent_today
+                        sender_info["last_send_date"] = last_date
+                        sender_info["is_done_today"] = (
+                            last_date == today_str and sent_today >= daily_lim
+                        )
+                    except Exception:
+                        pass
+            senders_state.append(sender_info)
+
+        daily_limit = cfg.get("daily_limit", 100)
+        days_remaining = max(0, (pending + daily_limit - 1) // daily_limit) if daily_limit > 0 else 0
+        pct_complete = round(sent / total * 100, 1) if total > 0 else 0.0
+        is_paused = (user_dir / "paused.flag").exists()
+        next_run_sgt = _calc_next_run_sgt(cfg.get("cron_expr", "0 8 * * *"))
+
+        # Watchdog: parse runs.log for consecutive tail failures and last run result
+        consecutive_failures = 0
+        last_run_ok: Optional[bool] = None
+        runs_log_path = user_dir / "runs.log"
+        if runs_log_path.exists():
+            try:
+                log_lines = [l for l in runs_log_path.read_text(encoding="utf-8").strip().splitlines() if l.strip()]
+                if log_lines:
+                    last_line = log_lines[-1]
+                    last_run_ok = ("rc=0" in last_line)
+                    # count consecutive failures from the end
+                    for line in reversed(log_lines):
+                        is_fail = "sent=0" in line and "rc=" in line and "rc=0" not in line
+                        if is_fail:
+                            consecutive_failures += 1
+                        else:
+                            break
+            except Exception:
+                pass
+
+        campaigns.append(ActiveCampaign(
+            user_id=cfg.get("chat_id", user_dir.name),
+            sender_name=cfg.get("sender_name", "") or "Mirae Advisory",
+            sender_company=cfg.get("sender_company", "Mirae Advisory"),
+            daily_limit=daily_limit,
+            sequences_csv=sequences_path,
+            total_sequences=total,
+            sent=sent,
+            pending=pending,
+            failed=failed,
+            replied=replied,
+            reply_rate=reply_rate,
+            positive_replies=positive_replies,
+            negative_replies=negative_replies,
+            bounced=bounced,
+            senders=senders_state,
+            next_run_sgt=next_run_sgt,
+            campaign_started=cfg.get("campaign_started", ""),
+            is_paused=is_paused,
+            days_remaining=days_remaining,
+            pct_complete=pct_complete,
+            consecutive_failures=consecutive_failures,
+            last_run_ok=last_run_ok,
+        ))
+
+    return campaigns
+
+
 def get_dashboard_data() -> dict:
-    """Aggregate dashboard KPIs."""
+    """Aggregate dashboard KPIs including outreach campaign stats."""
     files = list_lead_files()
     total_files = len(files)
     total_leads = sum(f.row_count for f in files)
 
-    by_stage = {}
+    by_stage: dict[str, int] = {}
     for f in files:
         by_stage[f.stage] = by_stage.get(f.stage, 0) + f.row_count
 
     recent_uploads = [
         {"filename": f.filename, "stage": f.stage, "mtime": f.mtime.isoformat(), "rows": f.row_count}
-        for f in files[:5]
+        for f in files[:8]
     ]
 
     # Pipeline health
@@ -441,11 +636,24 @@ def get_dashboard_data() -> dict:
         newest = files[0].mtime
         age_days = (datetime.now(timezone.utc) - newest).total_seconds() / 86400
         if age_days < 1:
-            health = {"status": "healthy", "color": "green", "message": "Recent activity detected"}
+            health = {"status": "healthy", "color": "green", "message": "Recent activity"}
         elif age_days < 7:
-            health = {"status": "stale", "color": "yellow", "message": f"Last activity {age_days:.1f} days ago"}
+            health = {"status": "stale", "color": "yellow", "message": f"Last activity {age_days:.1f}d ago"}
         else:
-            health = {"status": "stale", "color": "red", "message": f"Last activity {age_days:.1f} days ago"}
+            health = {"status": "stale", "color": "red", "message": f"Last activity {age_days:.1f}d ago"}
+
+    campaigns = get_active_campaigns()
+    total_sent = sum(c.sent for c in campaigns)
+    total_replied = sum(c.replied for c in campaigns)
+    total_pending = sum(c.pending for c in campaigns)
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    sent_today = sum(
+        s["sent_today"]
+        for c in campaigns
+        for s in c.senders
+        if s.get("last_send_date") == today_str
+    )
+    reply_rate = round(total_replied / total_sent * 100, 1) if total_sent > 0 else 0.0
 
     return {
         "total_files": total_files,
@@ -453,6 +661,12 @@ def get_dashboard_data() -> dict:
         "by_stage": by_stage,
         "recent_uploads": recent_uploads,
         "health": health,
+        "campaigns": campaigns,
+        "total_sent": total_sent,
+        "total_replied": total_replied,
+        "total_pending": total_pending,
+        "sent_today": sent_today,
+        "reply_rate": reply_rate,
     }
 
 
@@ -474,39 +688,61 @@ def get_deliverability_report() -> dict:
 
 
 def get_outreach_stats() -> dict:
-    """Read outreach history for stats."""
-    history_path = Path("/root/.openclaw/workspace/outreach/.outreach_history.json")
-    if not history_path.exists():
-        # Try alternate locations
-        alts = [
-            Path("/root/openclaw-zero-token/skills/sg-outreach/.outreach_history.json"),
-            Path("/root/.openclaw/workspace/.outreach_history.json"),
-        ]
-        for p in alts:
-            if p.exists():
-                history_path = p
-                break
-
-    if not history_path.exists():
+    """Read outreach stats from active campaigns' sequences CSV."""
+    campaigns = get_active_campaigns()
+    if not campaigns:
         return {"sent": 0, "bounced": 0, "replied": 0, "bounce_rate": 0, "reply_rate": 0}
+    sent = replied = 0
+    for c in campaigns:
+        if not c.sequences_csv or not c.sequences_csv.exists():
+            continue
+        try:
+            with open(c.sequences_csv, "r", encoding="utf-8-sig", newline="") as f:
+                for row in csv.DictReader(f):
+                    if row.get("status") == "sent":
+                        sent += 1
+                        if row.get("replied", "").strip().lower() == "true":
+                            replied += 1
+        except Exception:
+            pass
+    return {
+        "sent": sent,
+        "bounced": 0,
+        "replied": replied,
+        "bounce_rate": 0,
+        "reply_rate": round(replied / sent * 100, 1) if sent else 0,
+    }
 
-    try:
-        with open(history_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        contacts = data.get("contacts", [])
-        sent = len([c for c in contacts if c.get("status") == "sent"])
-        bounced = len([c for c in contacts if c.get("status") == "bounced"])
-        replied = len([c for c in contacts if c.get("replied")])
-        total = len(contacts)
-        return {
-            "sent": sent,
-            "bounced": bounced,
-            "replied": replied,
-            "bounce_rate": round(bounced / total * 100, 1) if total else 0,
-            "reply_rate": round(replied / total * 100, 1) if total else 0,
-        }
-    except Exception:
-        return {"sent": 0, "bounced": 0, "replied": 0, "bounce_rate": 0, "reply_rate": 0}
+
+def get_reply_rows(sentiment_filter: str = "") -> list[dict]:
+    """Return all replied sequences across all campaigns, sorted by replied_at desc."""
+    campaigns = get_active_campaigns()
+    rows = []
+    for c in campaigns:
+        if not c.sequences_csv or not c.sequences_csv.exists():
+            continue
+        try:
+            with open(c.sequences_csv, "r", encoding="utf-8-sig", newline="") as f:
+                for row in csv.DictReader(f):
+                    if row.get("replied", "").strip().lower() != "true":
+                        continue
+                    sentiment = row.get("reply_sentiment", "").strip() or "Neutral"
+                    if sentiment_filter and sentiment != sentiment_filter:
+                        continue
+                    rows.append({
+                        "company_name": row.get("company_name", ""),
+                        "to_email": row.get("to_email", ""),
+                        "to_name": row.get("to_name", ""),
+                        "sender_email": row.get("sender_email", ""),
+                        "subject": row.get("subject", ""),
+                        "replied_at": row.get("replied_at", ""),
+                        "reply_sentiment": sentiment,
+                        "email_number": row.get("email_number", "1"),
+                    })
+        except Exception:
+            pass
+    rows.sort(key=lambda r: r.get("replied_at", ""), reverse=True)
+    return rows
 
 
 def get_recent_contacts(n: int = 20) -> list[dict]:

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Replies — SG Pipeline{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold text-zinc-100">Replies</h1>
+</div>
+
+{# ── KPI Cards ─────────────────────────────────────────────────────── #}
+<div class="grid grid-cols-3 gap-4 mb-6">
+  <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 text-center">
+    <div class="text-3xl font-bold text-blue-400">{{ rows | length }}</div>
+    <div class="text-xs text-zinc-500 mt-1">Total Replies</div>
+  </div>
+  <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 text-center">
+    <div class="text-3xl font-bold text-emerald-400">{{ rows | selectattr('reply_sentiment', 'equalto', 'Positive') | list | length }}</div>
+    <div class="text-xs text-zinc-500 mt-1">Positive</div>
+  </div>
+  <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 text-center">
+    <div class="text-3xl font-bold text-red-400">{{ rows | selectattr('reply_sentiment', 'equalto', 'Negative') | list | length }}</div>
+    <div class="text-xs text-zinc-500 mt-1">Negative / Unsubscribe</div>
+  </div>
+</div>
+
+{# ── Filter bar ────────────────────────────────────────────────────── #}
+<form method="get" action="/portal/replies" class="mb-4 flex items-center gap-3">
+  <label class="text-xs text-zinc-500">Filter:</label>
+  {% for label, val in [('All', ''), ('Positive', 'Positive'), ('Neutral', 'Neutral'), ('Negative', 'Negative')] %}
+    <a href="/portal/replies{% if val %}?sentiment={{ val }}{% endif %}"
+       class="px-3 py-1.5 rounded text-xs font-medium transition-colors
+         {% if sentiment_filter == val %}
+           {% if val == 'Positive' %}bg-emerald-700/60 text-emerald-200 border border-emerald-700
+           {% elif val == 'Negative' %}bg-red-700/60 text-red-200 border border-red-700
+           {% elif val == 'Neutral' %}bg-blue-700/60 text-blue-200 border border-blue-700
+           {% else %}bg-zinc-700 text-zinc-100 border border-zinc-600{% endif %}
+         {% else %}bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700{% endif %}">
+      {{ label }}
+    </a>
+  {% endfor %}
+</form>
+
+{# ── Replies table ─────────────────────────────────────────────────── #}
+<div class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+  {% if rows %}
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-zinc-800/60 border-b border-zinc-800">
+        <tr>
+          <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 text-left">Company</th>
+          <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 text-left">Contact</th>
+          <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 text-left">Subject</th>
+          <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 text-center">Email #</th>
+          <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 text-center">Sentiment</th>
+          <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 text-left">Sender</th>
+          <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 text-left">Replied At</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-zinc-800/40">
+        {% for r in rows %}
+        <tr class="hover:bg-zinc-800/30">
+          <td class="px-5 py-3.5 text-zinc-200 font-medium">{{ r.company_name or '—' }}</td>
+          <td class="px-5 py-3.5">
+            <div class="text-zinc-300 text-sm">{{ r.to_name or '—' }}</div>
+            <div class="text-zinc-500 text-xs">{{ r.to_email }}</div>
+          </td>
+          <td class="px-5 py-3.5 text-zinc-400 text-xs max-w-xs">
+            <div class="truncate" title="{{ r.subject }}">{{ r.subject or '—' }}</div>
+          </td>
+          <td class="px-4 py-3.5 text-center text-zinc-400 text-xs">#{{ r.email_number }}</td>
+          <td class="px-4 py-3.5 text-center">
+            {% set s = r.reply_sentiment %}
+            <span class="inline-flex px-2 py-0.5 rounded text-xs font-semibold
+              {% if s == 'Positive' %}bg-emerald-900/40 text-emerald-300 border border-emerald-800/50
+              {% elif s == 'Negative' %}bg-red-900/40 text-red-300 border border-red-800/50
+              {% else %}bg-blue-900/30 text-blue-300 border border-blue-800/40{% endif %}">
+              {{ s }}
+            </span>
+          </td>
+          <td class="px-4 py-3.5 text-zinc-500 text-xs">{{ r.sender_email }}</td>
+          <td class="px-4 py-3.5 text-zinc-500 text-xs whitespace-nowrap">{{ r.replied_at[:16] if r.replied_at else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="px-5 py-12 text-center">
+    <div class="text-zinc-400 text-sm mb-1">No replies yet</div>
+    <div class="text-zinc-600 text-xs">Replies are detected automatically after each daily send via IMAP. Set up IMAP tracking on the <a href="/portal/imap-settings" class="text-amber-400 hover:text-amber-300">IMAP Settings</a> page.</div>
+  </div>
+  {% endif %}
+</div>
+
+{% if rows %}
+<p class="text-xs text-zinc-600 mt-3">
+  Replies are detected automatically after each daily 8am send.
+  Set up IMAP on the <a href="/portal/imap-settings" class="text-zinc-500 hover:text-zinc-400">IMAP Settings</a> page to enable tracking.
+  Negative replies and unsubscribe requests are automatically suppressed from future sends.
+</p>
+{% endif %}
+
+{% endblock %}
