@@ -643,6 +643,7 @@ def _mojeek_search(query, limit=10):
 SEARXNG_ENGINES = [
     "google", "startpage", "bing", "duckduckgo",  # tier 1: highest yield
     "yandex", "mojeek", "yahoo", "brave",          # tier 2: solid backup
+    "aol", "karmasearch",                           # tier 3: proven producers
 ]
 SEARXNG_HEALTHY_ENGINES = set()  # populated at runtime by check_searxng_health()
 
@@ -1650,12 +1651,12 @@ def main():
     # This diversifies results further across repeated runs of the same industry.
     # Engine preference lists — each includes full fallback cascade so if tier-1 engines
     # are rate-limited, tiers 2-4 keep the query alive. Order tuned for SG B2B yield.
-    e_primary = ["google", "startpage", "bing", "duckduckgo", "yandex", "mojeek", "yahoo", "brave"]
-    e_alt     = ["startpage", "google", "bing", "duckduckgo", "mojeek", "yandex", "yahoo", "brave"]
-    e_site    = ["bing", "google", "duckduckgo", "yandex", "startpage", "mojeek", "yahoo", "brave"]  # site: ops work best on bing/google
+    e_primary = ["google", "startpage", "bing", "duckduckgo", "yandex", "mojeek", "yahoo", "brave", "aol", "karmasearch"]
+    e_alt     = ["startpage", "google", "bing", "duckduckgo", "mojeek", "yandex", "yahoo", "brave", "aol", "karmasearch"]
+    e_site    = ["bing", "google", "duckduckgo", "yandex", "startpage", "mojeek", "yahoo", "brave", "aol", "karmasearch"]  # site: ops work best on bing/google
     rotate = run_count % 2
     e_main = e_alt if rotate else e_primary
-    e_list = ["startpage", "google", "mojeek", "bing", "yahoo", "brave"]  # listicles — high-yield engines
+    e_list = ["startpage", "google", "mojeek", "bing", "yahoo", "brave", "aol", "karmasearch"]  # listicles — high-yield engines
 
     queries = [
         # ── Tier 1: Direct company homepage hits (highest precision) ──────────
