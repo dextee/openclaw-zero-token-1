@@ -443,6 +443,142 @@ async def replies_page(
     })
 
 
+# ── Sent Email Log ───────────────────────────────────────────────────────────
+
+@app.get("/portal/sent-log", response_class=HTMLResponse)
+async def sent_log_page(
+    request: Request,
+    status: str = "",
+    search: str = "",
+    page: int = 1,
+    _: str = Depends(require_auth),
+):
+    """Recipient-level sent email log — shows WHO was emailed."""
+    rows_per_page = 100
+    all_rows = []
+
+    for seq_path in Path("/root/.openclaw/workspace/outreach").glob("user_*/sequences.csv"):
+        try:
+            with open(seq_path, "r", encoding="utf-8-sig") as f:
+                reader_csv = csv.DictReader(f)
+                for row in reader_csv:
+                    all_rows.append(row)
+        except Exception:
+            continue
+
+    # Filter by status
+    if status:
+        all_rows = [r for r in all_rows if r.get("status", "").lower() == status.lower()]
+
+    # Filter by search (company name or email)
+    if search:
+        s = search.lower()
+        all_rows = [r for r in all_rows if s in r.get("company_name", "").lower() or s in r.get("to_email", "").lower()]
+
+    total = len(all_rows)
+    total_pages = max(1, (total + rows_per_page - 1) // rows_per_page)
+    page = max(1, min(page, total_pages))
+    start = (page - 1) * rows_per_page
+    end = start + rows_per_page
+    page_rows = all_rows[start:end]
+
+    # Status counts for filter pills
+    status_counts = {}
+    for r in all_rows:
+        st = r.get("status", "unknown") or "unknown"
+        status_counts[st] = status_counts.get(st, 0) + 1
+
+    return templates.TemplateResponse("sent_log.html", {
+        "request": request,
+        "rows": page_rows,
+        "total": total,
+        "page": page,
+        "total_pages": total_pages,
+        "status_filter": status,
+        "search": search,
+        "status_counts": status_counts,
+    })
+
+
+# ── Daily Performance Report ─────────────────────────────────────────────────
+
+@app.get("/portal/reports", response_class=HTMLResponse)
+async def daily_report_page(request: Request, _: str = Depends(require_auth)):
+    """Day-over-day performance: sent / failed / replied / bounced."""
+    import csv
+
+    # 1. Parse runs.log for daily aggregates
+    daily = {}
+    for runs_path in Path("/root/.openclaw/workspace/outreach").glob("user_*/runs.log"):
+        try:
+            with open(runs_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    parts = line.split("|")
+                    if len(parts) < 2:
+                        continue
+                    ts_str = parts[0]
+                    try:
+                        dt = datetime.fromisoformat(ts_str)
+                        day = dt.strftime("%Y-%m-%d")
+                    except Exception:
+                        continue
+                    data = {}
+                    for p in parts[1:]:
+                        if "=" in p:
+                            k, v = p.split("=", 1)
+                            data[k] = v
+                    sent = int(data.get("sent", "0") or "0")
+                    failed = int(data.get("failed", "0") or "0")
+                    if day not in daily:
+                        daily[day] = {"sent": 0, "failed": 0, "replied": 0, "bounced": 0}
+                    daily[day]["sent"] += sent
+                    daily[day]["failed"] += failed
+        except Exception:
+            continue
+
+    # 2. Parse sequences.csv for replied / bounced per day
+    for seq_path in Path("/root/.openclaw/workspace/outreach").glob("user_*/sequences.csv"):
+        try:
+            with open(seq_path, "r", encoding="utf-8-sig") as f:
+                reader_csv = csv.DictReader(f)
+                for row in reader_csv:
+                    sent_at = row.get("sent_at", "").strip()
+                    status = row.get("status", "").strip()
+                    if not sent_at:
+                        continue
+                    try:
+                        dt = datetime.fromisoformat(sent_at.replace("Z", "+00:00"))
+                        day = dt.strftime("%Y-%m-%d")
+                    except Exception:
+                        continue
+                    if day not in daily:
+                        daily[day] = {"sent": 0, "failed": 0, "replied": 0, "bounced": 0}
+                    if status == "replied":
+                        daily[day]["replied"] += 1
+                    elif status == "bounced":
+                        daily[day]["bounced"] += 1
+        except Exception:
+            continue
+
+    # Sort by date descending
+    report_rows = sorted(daily.items(), key=lambda x: x[0], reverse=True)
+
+    # Totals
+    totals = {"sent": 0, "failed": 0, "replied": 0, "bounced": 0}
+    for _, vals in report_rows:
+        for k in totals:
+            totals[k] += vals[k]
+
+    return templates.TemplateResponse("reports.html", {
+        "request": request,
+        "report_rows": report_rows,
+        "totals": totals,
+    })
+
+
 @app.get("/portal/outreach/wizard", response_class=HTMLResponse)
 async def sequence_wizard(request: Request, _: str = Depends(require_auth)):
     files = reader.list_lead_files()

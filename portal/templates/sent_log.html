@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Sent Email Log — SG Pipeline{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-bold text-zinc-100">Sent Email Log</h1>
+    <p class="text-zinc-500 text-sm mt-1">Every recipient emailed across all campaigns. {{ total | fmt_int }} total rows.</p>
+  </div>
+</div>
+
+{# ── Filters ─────────────────────────────────────────────────────────── #}
+<div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4 mb-6">
+  <form method="get" class="flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-[200px]">
+      <label class="block text-xs font-medium text-zinc-500 mb-1.5">Search company or email</label>
+      <input type="text" name="search" value="{{ search }}"
+             class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
+             placeholder="e.g. ABC Construction or john@example.com">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-zinc-500 mb-1.5">Status</label>
+      <select name="status"
+              class="px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm focus:outline-none focus:border-zinc-500">
+        <option value="">All statuses</option>
+        {% for st, count in status_counts | dictsort %}
+          <option value="{{ st }}" {% if status_filter == st %}selected{% endif %}>{{ st }} ({{ count }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit"
+            class="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100 text-sm font-semibold transition-colors">
+      Filter
+    </button>
+    {% if search or status_filter %}
+      <a href="/portal/sent-log" class="px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-sm transition-colors">
+        Clear
+      </a>
+    {% endif %}
+  </form>
+
+  {# Status pills #}
+  <div class="flex flex-wrap gap-2 mt-3">
+    {% for st, count in status_counts | dictsort %}
+      <a href="/portal/sent-log?status={{ st }}&search={{ search | urlencode }}"
+         class="px-2.5 py-1 rounded-md text-xs font-medium border transition-colors
+                {% if status_filter == st %}bg-amber-900/30 border-amber-700/50 text-amber-300{% else %}bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-200{% endif %}">
+        {{ st }}: {{ count }}
+      </a>
+    {% endfor %}
+  </div>
+</div>
+
+{# ── Table ───────────────────────────────────────────────────────────── #}
+<div class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm text-left">
+      <thead class="bg-zinc-800/60 text-zinc-400 text-xs uppercase font-semibold">
+        <tr>
+          <th class="px-4 py-3">Company</th>
+          <th class="px-4 py-3">Recipient</th>
+          <th class="px-4 py-3">Subject</th>
+          <th class="px-4 py-3">Email #</th>
+          <th class="px-4 py-3">Tier</th>
+          <th class="px-4 py-3">Status</th>
+          <th class="px-4 py-3">Sent at</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-zinc-800">
+        {% for row in rows %}
+        <tr class="hover:bg-zinc-800/40 transition-colors">
+          <td class="px-4 py-3 font-medium text-zinc-200">{{ row.company_name or "—" }}</td>
+          <td class="px-4 py-3">
+            <div class="text-zinc-200">{{ row.to_name or "—" }}</div>
+            <div class="text-zinc-500 text-xs">{{ row.to_email or "—" }}</div>
+          </td>
+          <td class="px-4 py-3 text-zinc-300 max-w-xs truncate" title="{{ row.subject or '' }}">
+            {{ row.subject or "—" }}
+          </td>
+          <td class="px-4 py-3 text-zinc-400">{{ row.email_number or "—" }}</td>
+          <td class="px-4 py-3">
+            <span class="inline-flex px-2 py-0.5 rounded text-xs font-medium border tier-{{ row.sequence_tier or 'C' }}">
+              {{ row.sequence_tier or "—" }}
+            </span>
+          </td>
+          <td class="px-4 py-3">
+            <span class="inline-flex px-2 py-0.5 rounded text-xs font-medium border status-{{ row.status | replace(' ', '_') | replace('-', '_') }}">
+              {{ row.status or "—" }}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-zinc-500 text-xs whitespace-nowrap">
+            {{ row.sent_at or "—" }}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="px-4 py-12 text-center text-zinc-500">
+            No rows match your filters.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# ── Pagination ───────────────────────────────────────────────────── #}
+  {% if total_pages > 1 %}
+  <div class="px-4 py-3 border-t border-zinc-800 flex items-center justify-between">
+    <div class="text-zinc-500 text-xs">
+      Page {{ page }} of {{ total_pages }} · {{ total }} total
+    </div>
+    <div class="flex gap-1">
+      {% if page > 1 %}
+        <a href="/portal/sent-log?page={{ page - 1 }}&status={{ status_filter | urlencode }}&search={{ search | urlencode }}"
+           class="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs transition-colors">← Prev</a>
+      {% endif %}
+      {% if page < total_pages %}
+        <a href="/portal/sent-log?page={{ page + 1 }}&status={{ status_filter | urlencode }}&search={{ search | urlencode }}"
+           class="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs transition-colors">Next →</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

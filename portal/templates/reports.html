@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Daily Performance Report — SG Pipeline{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-bold text-zinc-100">Daily Performance Report</h1>
+    <p class="text-zinc-500 text-sm mt-1">Day-over-day email performance from runs.log + sequences.csv.</p>
+  </div>
+</div>
+
+{# ── Totals cards ────────────────────────────────────────────────────── #}
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+  <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+    <div class="text-zinc-500 text-xs font-medium uppercase tracking-wide">Total Sent</div>
+    <div class="text-2xl font-bold text-emerald-400 mt-1">{{ totals.sent | fmt_int }}</div>
+  </div>
+  <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+    <div class="text-zinc-500 text-xs font-medium uppercase tracking-wide">Total Failed</div>
+    <div class="text-2xl font-bold text-red-400 mt-1">{{ totals.failed | fmt_int }}</div>
+  </div>
+  <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+    <div class="text-zinc-500 text-xs font-medium uppercase tracking-wide">Total Replied</div>
+    <div class="text-2xl font-bold text-blue-400 mt-1">{{ totals.replied | fmt_int }}</div>
+  </div>
+  <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+    <div class="text-zinc-500 text-xs font-medium uppercase tracking-wide">Total Bounced</div>
+    <div class="text-2xl font-bold text-amber-400 mt-1">{{ totals.bounced | fmt_int }}</div>
+  </div>
+</div>
+
+{# ── Daily table ─────────────────────────────────────────────────────── #}
+<div class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm text-left">
+      <thead class="bg-zinc-800/60 text-zinc-400 text-xs uppercase font-semibold">
+        <tr>
+          <th class="px-4 py-3">Date</th>
+          <th class="px-4 py-3 text-right">Sent</th>
+          <th class="px-4 py-3 text-right">Failed</th>
+          <th class="px-4 py-3 text-right">Replied</th>
+          <th class="px-4 py-3 text-right">Bounced</th>
+          <th class="px-4 py-3 text-right">Delivery Rate</th>
+          <th class="px-4 py-3 text-right">Reply Rate</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-zinc-800">
+        {% for day, vals in report_rows %}
+        {% set delivery_rate = (vals.sent / (vals.sent + vals.failed) * 100) if (vals.sent + vals.failed) > 0 else 0 %}
+        {% set reply_rate = (vals.replied / vals.sent * 100) if vals.sent > 0 else 0 %}
+        <tr class="hover:bg-zinc-800/40 transition-colors">
+          <td class="px-4 py-3 font-medium text-zinc-200 whitespace-nowrap">{{ day }}</td>
+          <td class="px-4 py-3 text-right text-emerald-400 font-medium">{{ vals.sent | fmt_int }}</td>
+          <td class="px-4 py-3 text-right text-red-400">{{ vals.failed | fmt_int }}</td>
+          <td class="px-4 py-3 text-right text-blue-400">{{ vals.replied | fmt_int }}</td>
+          <td class="px-4 py-3 text-right text-amber-400">{{ vals.bounced | fmt_int }}</td>
+          <td class="px-4 py-3 text-right text-zinc-300">{{ delivery_rate | fmt_pct(1) }}</td>
+          <td class="px-4 py-3 text-right text-zinc-300">{{ reply_rate | fmt_pct(1) }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="px-4 py-12 text-center text-zinc-500">
+            No daily data found. Runs will appear here once the daily outreach cron executes.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
