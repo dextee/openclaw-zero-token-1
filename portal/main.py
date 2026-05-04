@@ -3,6 +3,7 @@ import asyncio, csv, hashlib, io, json, os, re, subprocess, sys
 from datetime import datetime, timezone
 from urllib.parse import quote_plus
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -18,6 +19,7 @@ import imap_auth
 from deliverability_check import check_domain as _check_domain
 
 app = FastAPI(title="SG Pipeline Portal", docs_url=None, redoc_url=None)
+app.mount("/portal/static", StaticFiles(directory=str(PORTAL_DIR / "static"), html=False), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 # Filters
