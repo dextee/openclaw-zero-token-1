@@ -101,7 +101,7 @@ cd /root/openclaw-zero-token
 OPENCLAW_CONFIG_PATH=/root/openclaw-zero-token/.openclaw-upstream-state/openclaw.json \
 OPENCLAW_STATE_DIR=/root/openclaw-zero-token/.openclaw-upstream-state \
 OPENCLAW_GATEWAY_PORT=3001 \
-TELEGRAM_BOT_TOKEN="8686771791:AAFMmAvxxSd3m2aqX1vmD-DICo36L0T6Zes" \
+TELEGRAM_BOT_TOKEN="<REDACTED_TELEGRAM_BOT_TOKEN>" \
 node openclaw.mjs gateway --port 3001 &
 ```
 

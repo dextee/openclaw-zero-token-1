@@ -28,7 +28,7 @@
   "channels": {
     "telegram": {
       "enabled": true,
-      "botToken": "8686771791:AAFMmAvxxSd3m2aqX1vmD-DICo36L0T6Zes",
+      "botToken": "<REDACTED_TELEGRAM_BOT_TOKEN>",
       "dmPolicy": "open",
       "allowFrom": ["*"],
       "groups": { "*": { "requireMention": true } }
@@ -44,7 +44,7 @@
 
 ### Environment (active): `.env`
 ```
-TELEGRAM_BOT_TOKEN=8686771791:AAFMmAvxxSd3m2aqX1vmD-DICo36L0T6Zes
+TELEGRAM_BOT_TOKEN=<REDACTED_TELEGRAM_BOT_TOKEN>
 OPENCLAW_CONFIG_PATH=/root/openclaw-zero-token/.openclaw-upstream-state/openclaw.json
 OPENCLAW_STATE_DIR=/root/openclaw-zero-token/.openclaw-upstream-state
 OPENCLAW_GATEWAY_PORT=3001
@@ -65,7 +65,7 @@ OPENCLAW_GATEWAY_PORT=3001
 
 ### Telegram Bot:
 - Bot: @miraeclawbot
-- Token: `8686771791:AAFMmAvxxSd3m2aqX1vmD-DICo36L0T6Zes`
+- Token: `<REDACTED_TELEGRAM_BOT_TOKEN>`
 - Config: ✅ Correct in both config file AND .env
 - DM Policy: `open` (no pairing needed)
 - User 280451401 (@sgmining) is whitelisted in `~/.openclaw/credentials/telegram-default-allowFrom.json`

@@ -106,7 +106,7 @@
     "telegram": {
       "enabled": true,
       "dmPolicy": "open",
-      "botToken": "8686771791:AAFMmAvxxSd3m2aqX1vmD-DICo36L0T6Zes",
+      "botToken": "<REDACTED_TELEGRAM_BOT_TOKEN>",
       "groups": {
         "*": {
           "requireMention": true

@@ -5,7 +5,7 @@
 ### Bot Details
 - **Bot Username**: @miraeclawbot
 - **Bot Link**: https://t.me/miraeclawbot
-- **Token**: `8686771791:AAFMmAvxxSd3m2aqX1vmD-DICo36L0T6Zes` ✅ **CONFIGURED**
+- **Token**: `<REDACTED_TELEGRAM_BOT_TOKEN>` ✅ **CONFIGURED**
 - **Token Status**: Successfully added to `openclaw.json`
 
 ---
@@ -81,7 +81,7 @@ The integrated Telegram plugin supports:
   "channels": {
     "telegram": {
       "enabled": true,
-      "botToken": "8686771791:AAFMmAvxxSd3m2aqX1vmD-DICo36L0T6Zes",
+      "botToken": "<REDACTED_TELEGRAM_BOT_TOKEN>",
       "dmPolicy": "pairing",
       "groups": {
         "*": {
@@ -219,7 +219,7 @@ These commands are built into the OpenClaw Telegram plugin:
 ## 🔐 Security Notes
 
 ### Token Security ⚠️
-- **Your token**: `8686771791:AAFMmAvxxSd3m2aqX1vmD-DICo36L0T6Zes`
+- **Your token**: `<REDACTED_TELEGRAM_BOT_TOKEN>`
 - **Status**: Stored in `openclaw.json` (local config)
 - **Warning**: Anyone with this token can control your bot
 - **Action**: Keep your config file secure and don't commit it to public repos

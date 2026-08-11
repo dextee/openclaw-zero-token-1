@@ -3,7 +3,7 @@
 ## Bot Information
 - **Username**: @miraeclawbot
 - **Link**: https://t.me/miraeclawbot
-- **Token**: `8686771791:AAFMmAvxxSd3m2aqX1vmD-DICo36L0T6Zes` ✅
+- **Token**: `<REDACTED_TELEGRAM_BOT_TOKEN>` ✅
 - **Status**: Configured and ready to activate
 
 ---
@@ -69,7 +69,7 @@ curl http://127.0.0.1:9222/json/version
 {
   "telegram": {
     "enabled": true,
-    "botToken": "8686771791:AAFMmAvxxSd3m2aqX1vmD-DICo36L0T6Zes",
+    "botToken": "<REDACTED_TELEGRAM_BOT_TOKEN>",
     "dmPolicy": "pairing",           // Users must be approved
     "groups": {
       "*": {
